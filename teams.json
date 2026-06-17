@@ -1,0 +1,2130 @@
+[
+  {
+    "school": "University at Albany, The State University of New York(Albany)",
+    "nickname": "Great Danes",
+    "city": "New York",
+    "state": "Varsity Field",
+    "conference": "America East"
+  },
+  {
+    "school": "Binghamton University",
+    "nickname": "Bearcats",
+    "city": "New York",
+    "state": "Varsity Field",
+    "conference": "America East"
+  },
+  {
+    "school": "Bryant University",
+    "nickname": "Bulldogs",
+    "city": "Rhode Island",
+    "state": "Conaty Park",
+    "conference": "America East"
+  },
+  {
+    "school": "University of Maine",
+    "nickname": "Black Bears",
+    "city": "Maine",
+    "state": "Larry Mahaney Diamond",
+    "conference": "America East"
+  },
+  {
+    "school": "New Jersey Institute of Technology(NJIT)",
+    "nickname": "Highlanders",
+    "city": "New Jersey",
+    "state": "Yogi Berra Stadium",
+    "conference": "America East"
+  },
+  {
+    "school": "University of Massachusetts Lowell(UMass Lowell)",
+    "nickname": "River Hawks",
+    "city": "Massachusetts",
+    "state": "Edward A. LeLacheur Park",
+    "conference": "America East"
+  },
+  {
+    "school": "University of Maryland, Baltimore County(UMBC)",
+    "nickname": "Retrievers",
+    "city": "Maryland",
+    "state": "Alumni Field",
+    "conference": "America East"
+  },
+  {
+    "school": "University of North Carolina at Charlotte(Charlotte)",
+    "nickname": "49ers",
+    "city": "North Carolina",
+    "state": "Robert and Mariam Hayes Stadium",
+    "conference": "American"
+  },
+  {
+    "school": "East Carolina University",
+    "nickname": "Pirates",
+    "city": "North Carolina",
+    "state": "Clark\u2013LeClair Stadium",
+    "conference": "American"
+  },
+  {
+    "school": "Florida Atlantic University(FAU)",
+    "nickname": "Owls",
+    "city": "Florida",
+    "state": "FAU Baseball Stadium",
+    "conference": "American"
+  },
+  {
+    "school": "University of Memphis",
+    "nickname": "Tigers",
+    "city": "Tennessee",
+    "state": "FedExPark",
+    "conference": "American"
+  },
+  {
+    "school": "Rice University",
+    "nickname": "Owls",
+    "city": "Texas",
+    "state": "Reckling Park",
+    "conference": "American"
+  },
+  {
+    "school": "University of South Florida(USF)",
+    "nickname": "Bulls",
+    "city": "Florida",
+    "state": "USF Baseball Stadium",
+    "conference": "American"
+  },
+  {
+    "school": "Tulane University",
+    "nickname": "Green Wave",
+    "city": "Louisiana",
+    "state": "Greer Field at Turchin Stadium",
+    "conference": "American"
+  },
+  {
+    "school": "University of Alabama at Birmingham(UAB)",
+    "nickname": "Blazers",
+    "city": "Alabama",
+    "state": "Jerry D. Young Memorial Field",
+    "conference": "American"
+  },
+  {
+    "school": "University of Texas at San Antonio(UTSA)",
+    "nickname": "Roadrunners",
+    "city": "Texas",
+    "state": "Roadrunner Field",
+    "conference": "American"
+  },
+  {
+    "school": "Wichita State University",
+    "nickname": "Shockers",
+    "city": "Kansas",
+    "state": "Eck Stadium",
+    "conference": "American"
+  },
+  {
+    "school": "Boston College",
+    "nickname": "Eagles",
+    "city": "Massachusetts",
+    "state": "Eddie Pellagrini Diamond",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of California, Berkeley (California/Cal)",
+    "nickname": "Golden Bears",
+    "city": "California",
+    "state": "Evans Diamond",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Clemson University",
+    "nickname": "Tigers",
+    "city": "South Carolina",
+    "state": "Doug Kingsmore Stadium",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Duke University",
+    "nickname": "Blue Devils",
+    "city": "North Carolina",
+    "state": "Jack Coombs Field, Durham Athletic Park",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Florida State University",
+    "nickname": "Seminoles",
+    "city": "Florida",
+    "state": "Mike Martin Field at Dick Howser Stadium",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Georgia Institute of Technology(Georgia Tech)",
+    "nickname": "Yellow Jackets",
+    "city": "Georgia",
+    "state": "Russ Chandler Stadium",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of Louisville",
+    "nickname": "Cardinals",
+    "city": "Kentucky",
+    "state": "Jim Patterson Stadium",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of Miami",
+    "nickname": "Hurricanes",
+    "city": "Florida",
+    "state": "Alex Rodriguez Park at Mark Light Field",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of North Carolina at Chapel Hill(North Carolina/Carolina)",
+    "nickname": "Tar Heels",
+    "city": "North Carolina",
+    "state": "Boshamer Stadium",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "North Carolina State University(NC State)",
+    "nickname": "Wolfpack",
+    "city": "North Carolina",
+    "state": "Doak Field",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of Notre Dame",
+    "nickname": "Fighting Irish",
+    "city": "Indiana",
+    "state": "Frank Eck Stadium",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of Pittsburgh(Pitt)",
+    "nickname": "Panthers",
+    "city": "Pennsylvania",
+    "state": "Petersen Sports Complex",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Stanford University",
+    "nickname": "Cardinal",
+    "city": "California",
+    "state": "Sunken Diamond",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "University of Virginia",
+    "nickname": "Cavaliers",
+    "city": "Virginia",
+    "state": "Davenport Field",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Virginia Polytechnic Institute and State University(Virginia Tech)",
+    "nickname": "Hokies",
+    "city": "Virginia",
+    "state": "English Field",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Wake Forest University",
+    "nickname": "Demon Deacons",
+    "city": "North Carolina",
+    "state": "Gene Hooks Field at Wake Forest Baseball Park",
+    "conference": "Atlantic Coast"
+  },
+  {
+    "school": "Austin Peay State University(Austin Peay)",
+    "nickname": "Governors",
+    "city": "Tennessee",
+    "state": "Raymond C. Hand Park",
+    "conference": "ASUN[a 1]"
+  },
+  {
+    "school": "Bellarmine University",
+    "nickname": "Knights",
+    "city": "Kentucky",
+    "state": "Knights Baseball Field",
+    "conference": "ASUN"
+  },
+  {
+    "school": "University of Central Arkansas",
+    "nickname": "Bears",
+    "city": "Arkansas",
+    "state": "Bear Stadium",
+    "conference": "ASUN[a 1]"
+  },
+  {
+    "school": "Eastern Kentucky University(EKU)",
+    "nickname": "Colonels",
+    "city": "Kentucky",
+    "state": "Turkey Hughes Field",
+    "conference": "ASUN[a 1]"
+  },
+  {
+    "school": "Florida Gulf Coast University(FGCU)",
+    "nickname": "Eagles",
+    "city": "Florida",
+    "state": "Swanson Stadium",
+    "conference": "ASUN"
+  },
+  {
+    "school": "Jacksonville University",
+    "nickname": "Dolphins",
+    "city": "Florida",
+    "state": "John Sessions Stadium",
+    "conference": "ASUN"
+  },
+  {
+    "school": "Lipscomb University",
+    "nickname": "Bisons",
+    "city": "Tennessee",
+    "state": "Ken Dugan Field at Stephen Lee Marsh Stadium",
+    "conference": "ASUN"
+  },
+  {
+    "school": "University of North Alabama",
+    "nickname": "Lions",
+    "city": "Alabama",
+    "state": "Bank Independent Stadium",
+    "conference": "ASUN[a 1]"
+  },
+  {
+    "school": "University of North Florida",
+    "nickname": "Ospreys",
+    "city": "Florida",
+    "state": "Harmon Stadium",
+    "conference": "ASUN"
+  },
+  {
+    "school": "Queens University of Charlotte",
+    "nickname": "Royals",
+    "city": "North Carolina",
+    "state": "Tuckaseegee Dream Fields",
+    "conference": "ASUN"
+  },
+  {
+    "school": "Stetson University",
+    "nickname": "Hatters",
+    "city": "Florida",
+    "state": "Melching Field at Conrad Park",
+    "conference": "ASUN"
+  },
+  {
+    "school": "Davidson College",
+    "nickname": "Wildcats",
+    "city": "North Carolina",
+    "state": "T. Henry Wilson, Jr. Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "University of Dayton",
+    "nickname": "Flyers",
+    "city": "Ohio",
+    "state": "Woerner Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "Fordham University",
+    "nickname": "Rams",
+    "city": "New York",
+    "state": "Jim Houlihan Park at Jack Coffey Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "George Mason University",
+    "nickname": "Patriots",
+    "city": "Virginia",
+    "state": "Spuhler Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "George Washington University",
+    "nickname": "Revolutionaries",
+    "city": "Washington, D.C.",
+    "state": "Barcroft Park",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "La Salle University[a 2]",
+    "nickname": "Explorers",
+    "city": "Pennsylvania",
+    "state": "Hank DeVincent Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "University of Rhode Island",
+    "nickname": "Rams",
+    "city": "Rhode Island",
+    "state": "Bill Beck Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "University of Richmond",
+    "nickname": "Spiders",
+    "city": "Virginia",
+    "state": "Malcolm U. Pitt Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "St. Bonaventure University",
+    "nickname": "Bonnies",
+    "city": "New York",
+    "state": "Fred Handler Park",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "Saint Joseph's University",
+    "nickname": "Hawks",
+    "city": "Pennsylvania",
+    "state": "Smithson Field",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "Saint Louis University",
+    "nickname": "Billikens",
+    "city": "Missouri",
+    "state": "Billiken Sports Center",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "Virginia Commonwealth University(VCU)",
+    "nickname": "Rams",
+    "city": "Virginia",
+    "state": "The Diamond",
+    "conference": "Atlantic 10"
+  },
+  {
+    "school": "Butler University",
+    "nickname": "Bulldogs",
+    "city": "Indiana",
+    "state": "Bulldog Park",
+    "conference": "Big East"
+  },
+  {
+    "school": "Creighton University",
+    "nickname": "Bluejays",
+    "city": "Nebraska",
+    "state": "Creighton Sports Complex,Charles Schwab Field",
+    "conference": "Big East"
+  },
+  {
+    "school": "Georgetown University",
+    "nickname": "Hoyas",
+    "city": "Washington, D.C.",
+    "state": "Shirley Povich Field",
+    "conference": "Big East"
+  },
+  {
+    "school": "St. John's University",
+    "nickname": "Red Storm",
+    "city": "New York",
+    "state": "Jack Kaiser Stadium",
+    "conference": "Big East"
+  },
+  {
+    "school": "Seton Hall University",
+    "nickname": "Pirates",
+    "city": "New Jersey",
+    "state": "Owen T. Carroll Field",
+    "conference": "Big East"
+  },
+  {
+    "school": "University of Connecticut(UConn)",
+    "nickname": "Huskies",
+    "city": "Connecticut",
+    "state": "Elliot Ballpark",
+    "conference": "Big East"
+  },
+  {
+    "school": "Villanova University",
+    "nickname": "Wildcats",
+    "city": "Pennsylvania",
+    "state": "Villanova Ballpark at Plymouth",
+    "conference": "Big East"
+  },
+  {
+    "school": "Xavier University",
+    "nickname": "Musketeers",
+    "city": "Ohio",
+    "state": "J. Page Hayden Field",
+    "conference": "Big East"
+  },
+  {
+    "school": "Charleston Southern University",
+    "nickname": "Buccaneers",
+    "city": "South Carolina",
+    "state": "Buccaneer Ballpark",
+    "conference": "Big South"
+  },
+  {
+    "school": "Gardner\u2013Webb University",
+    "nickname": "Bulldogs (Diamond \u2018Dogs)",
+    "city": "North Carolina",
+    "state": "John Henry Moss Stadium",
+    "conference": "Big South"
+  },
+  {
+    "school": "High Point University",
+    "nickname": "Panthers",
+    "city": "North Carolina",
+    "state": "George S. Erath Field at Coy O. Williard Baseball Stadium",
+    "conference": "Big South"
+  },
+  {
+    "school": "Longwood University",
+    "nickname": "Lancers",
+    "city": "Virginia",
+    "state": "Bolding Stadium",
+    "conference": "Big South"
+  },
+  {
+    "school": "Presbyterian College",
+    "nickname": "Blue Hose",
+    "city": "South Carolina",
+    "state": "Presbyterian College Baseball Complex",
+    "conference": "Big South"
+  },
+  {
+    "school": "Radford University",
+    "nickname": "Highlanders",
+    "city": "Virginia",
+    "state": "Radford University Baseball Stadium",
+    "conference": "Big South"
+  },
+  {
+    "school": "University of North Carolina at Asheville(UNC Asheville)",
+    "nickname": "Bulldogs",
+    "city": "North Carolina",
+    "state": "Greenwood Baseball Field, McCormick Field",
+    "conference": "Big South"
+  },
+  {
+    "school": "University of South Carolina Upstate(USC Upstate)",
+    "nickname": "Spartans",
+    "city": "South Carolina",
+    "state": "Cleveland S. Harley Baseball Park",
+    "conference": "Big South"
+  },
+  {
+    "school": "Winthrop University",
+    "nickname": "Eagles",
+    "city": "South Carolina",
+    "state": "Winthrop Ballpark",
+    "conference": "Big South"
+  },
+  {
+    "school": "University of Illinois Urbana\u2013Champaign(Illinois)",
+    "nickname": "Fighting Illini",
+    "city": "Illinois",
+    "state": "Illinois Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Indiana University Bloomington(Indiana)",
+    "nickname": "Hoosiers",
+    "city": "Indiana",
+    "state": "Bart Kaufman Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Iowa",
+    "nickname": "Hawkeyes",
+    "city": "Iowa",
+    "state": "Duane Banks Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Maryland, College Park(Maryland)",
+    "nickname": "Terrapins",
+    "city": "Maryland",
+    "state": "Shipley Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Michigan",
+    "nickname": "Wolverines",
+    "city": "Michigan",
+    "state": "Ray Fisher Stadium",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Michigan State University",
+    "nickname": "Spartans",
+    "city": "Michigan",
+    "state": "Drayton McLane Baseball Stadium at John H. Kobs Field, Cooley Law School Stadium",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Minnesota",
+    "nickname": "Golden Gophers",
+    "city": "Minnesota",
+    "state": "Siebert Field, U.S. Bank Stadium",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Nebraska\u2013Lincoln(Nebraska)",
+    "nickname": "Cornhuskers",
+    "city": "Nebraska",
+    "state": "Haymarket Park",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Northwestern University",
+    "nickname": "Wildcats",
+    "city": "Illinois",
+    "state": "Rocky Miller Park",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Ohio State University",
+    "nickname": "Buckeyes",
+    "city": "Ohio",
+    "state": "Bill Davis Stadium",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Oregon",
+    "nickname": "Ducks",
+    "city": "Oregon",
+    "state": "PK Park",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Pennsylvania State University(Penn State)",
+    "nickname": "Nittany Lions",
+    "city": "Pennsylvania",
+    "state": "Medlar Field at Lubrano Park",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Purdue University",
+    "nickname": "Boilermakers",
+    "city": "Indiana",
+    "state": "Alexander Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "Rutgers University",
+    "nickname": "Scarlet Knights",
+    "city": "New Jersey",
+    "state": "Bainton Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of California, Los Angeles(UCLA)",
+    "nickname": "Bruins",
+    "city": "California",
+    "state": "Jackie Robinson Stadium",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Southern California(USC/Southern Cal)",
+    "nickname": "Trojans",
+    "city": "California",
+    "state": "Dedeaux Field",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Washington",
+    "nickname": "Huskies",
+    "city": "Washington",
+    "state": "Husky Ballpark",
+    "conference": "Big Ten"
+  },
+  {
+    "school": "University of Arizona",
+    "nickname": "Wildcats",
+    "city": "Arizona",
+    "state": "Hi Corbett Field",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Arizona State University",
+    "nickname": "Sun Devils",
+    "city": "Arizona",
+    "state": "Phoenix Municipal Stadium",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Baylor University",
+    "nickname": "Bears",
+    "city": "Texas",
+    "state": "Baylor Ballpark",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Brigham Young University(BYU)",
+    "nickname": "Cougars",
+    "city": "Utah",
+    "state": "Larry H. Miller Field",
+    "conference": "Big 12"
+  },
+  {
+    "school": "University of Cincinnati",
+    "nickname": "Bearcats",
+    "city": "Ohio",
+    "state": "UC Baseball Stadium",
+    "conference": "Big 12"
+  },
+  {
+    "school": "University of Houston",
+    "nickname": "Cougars",
+    "city": "Texas",
+    "state": "Darryl & Lori Schroeder Park",
+    "conference": "Big 12"
+  },
+  {
+    "school": "University of Kansas",
+    "nickname": "Jayhawks",
+    "city": "Kansas",
+    "state": "Hoglund Ballpark",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Kansas State University",
+    "nickname": "Wildcats",
+    "city": "Kansas",
+    "state": "Tointon Family Stadium",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Oklahoma State University",
+    "nickname": "Cowboys",
+    "city": "Oklahoma",
+    "state": "O'Brate Stadium",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Texas Christian University(TCU)",
+    "nickname": "Horned Frogs",
+    "city": "Texas",
+    "state": "Lupton Stadium",
+    "conference": "Big 12"
+  },
+  {
+    "school": "Texas Tech University",
+    "nickname": "Red Raiders",
+    "city": "Texas",
+    "state": "Dan Law Field at Rip Griffin Park",
+    "conference": "Big 12"
+  },
+  {
+    "school": "University of Central Florida (UCF)",
+    "nickname": "Knights",
+    "city": "Florida",
+    "state": "John Euliano Park",
+    "conference": "Big 12"
+  },
+  {
+    "school": "University of Utah",
+    "nickname": "Utes",
+    "city": "Utah",
+    "state": "America First Ballpark",
+    "conference": "Big 12"
+  },
+  {
+    "school": "West Virginia University",
+    "nickname": "Mountaineers",
+    "city": "West Virginia",
+    "state": "Monongalia County Ballpark",
+    "conference": "Big 12"
+  },
+  {
+    "school": "California Polytechnic State University(Cal Poly)",
+    "nickname": "Mustangs",
+    "city": "California",
+    "state": "Robin Baggett Stadium",
+    "conference": "Big West"
+  },
+  {
+    "school": "California State University, Fullerton(Cal State Fullerton)",
+    "nickname": "Titans",
+    "city": "California",
+    "state": "Goodwin Field",
+    "conference": "Big West"
+  },
+  {
+    "school": "California State University, Northridge(CSUN/Cal State Northridge)",
+    "nickname": "Matadors",
+    "city": "California",
+    "state": "Matador Field",
+    "conference": "Big West"
+  },
+  {
+    "school": "California State University, Bakersfield(Bakersfield/CSU Bakersfield)",
+    "nickname": "Roadrunners",
+    "city": "California",
+    "state": "Hardt Field",
+    "conference": "Big West"
+  },
+  {
+    "school": "University of Hawai\u02bbi at M\u0101noa(Hawai\u02bbi)",
+    "nickname": "Rainbow Warriors",
+    "city": "Hawaii",
+    "state": "Les Murakami Stadium",
+    "conference": "Big West[a 3]"
+  },
+  {
+    "school": "California State University, Long Beach(Long Beach State)",
+    "nickname": "Dirtbags",
+    "city": "California",
+    "state": "Blair Field",
+    "conference": "Big West"
+  },
+  {
+    "school": "University of California, Davis(UC Davis)",
+    "nickname": "Aggies",
+    "city": "California",
+    "state": "Dobbins Stadium",
+    "conference": "Big West[a 3]"
+  },
+  {
+    "school": "University of California, Irvine(UC Irvine)",
+    "nickname": "Anteaters",
+    "city": "California",
+    "state": "Cicerone Field",
+    "conference": "Big West"
+  },
+  {
+    "school": "University of California, Riverside(UC Riverside)",
+    "nickname": "Highlanders",
+    "city": "California",
+    "state": "Riverside Sports Complex",
+    "conference": "Big West"
+  },
+  {
+    "school": "University of California, San Diego (UC San Diego)",
+    "nickname": "Tritons",
+    "city": "California",
+    "state": "Triton Ballpark",
+    "conference": "Big West[a 4]"
+  },
+  {
+    "school": "University of California, Santa Barbara(UC Santa Barbara)",
+    "nickname": "Gauchos",
+    "city": "California",
+    "state": "Caesar Uyesaka Stadium",
+    "conference": "Big West"
+  },
+  {
+    "school": "Campbell University",
+    "nickname": "Fighting Camels",
+    "city": "North Carolina",
+    "state": "Jim Perry Stadium",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "College of Charleston(Charleston)",
+    "nickname": "Cougars",
+    "city": "South Carolina",
+    "state": "CofC Baseball Stadium at Patriot's Point",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Elon University",
+    "nickname": "Phoenix",
+    "city": "North Carolina",
+    "state": "Walter C. Latham Park",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Hofstra University",
+    "nickname": "Pride",
+    "city": "New York",
+    "state": "University Field",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Monmouth University",
+    "nickname": "Hawks",
+    "city": "New Jersey",
+    "state": "Monmouth Baseball Field",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "North Carolina Agricultural and Technical State University(North Carolina A&T)",
+    "nickname": "Aggies",
+    "city": "North Carolina",
+    "state": "World War Memorial Stadium",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Northeastern University",
+    "nickname": "Huskies",
+    "city": "Massachusetts",
+    "state": "Parsons Field/Friedman Diamond",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Stony Brook University",
+    "nickname": "Seawolves",
+    "city": "New York",
+    "state": "Joe Nathan Field",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Towson University",
+    "nickname": "Tigers",
+    "city": "Maryland",
+    "state": "John B. Schuerholz Baseball Complex",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "University of North Carolina Wilmington (UNC Wilmington/UNCW)",
+    "nickname": "Seahawks",
+    "city": "North Carolina",
+    "state": "Brooks Field",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "College of William & Mary",
+    "nickname": "Tribe",
+    "city": "Virginia",
+    "state": "Plumeri Park",
+    "conference": "Coastal Athletic"
+  },
+  {
+    "school": "Dallas Baptist University",
+    "nickname": "Patriots",
+    "city": "Texas",
+    "state": "Horner Ballpark",
+    "conference": "Conference USA[a 5][a 6]"
+  },
+  {
+    "school": "University of Delaware",
+    "nickname": "Fightin' Blue Hens",
+    "city": "Delaware",
+    "state": "Bob Hannah Stadium",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Florida International University(FIU)",
+    "nickname": "Panthers",
+    "city": "Florida",
+    "state": "FIU Baseball Stadium",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Jacksonville State University",
+    "nickname": "Gamecocks",
+    "city": "Alabama",
+    "state": "Rudy Abbott Field",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Kennesaw State University",
+    "nickname": "Owls",
+    "city": "Georgia",
+    "state": "Fred Stillwell Stadium",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Liberty University",
+    "nickname": "Flames",
+    "city": "Virginia",
+    "state": "Liberty Baseball Stadium",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Louisiana Tech University",
+    "nickname": "Bulldogs",
+    "city": "Louisiana",
+    "state": "J. C. Love Field at Pat Patterson Park",
+    "conference": "Conference USA[a 7]"
+  },
+  {
+    "school": "Middle Tennessee State University(Middle Tennessee)",
+    "nickname": "Blue Raiders",
+    "city": "Tennessee",
+    "state": "Reese Smith Jr. Field",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Missouri State University",
+    "nickname": "Bears",
+    "city": "Missouri",
+    "state": "Hammons Field",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "New Mexico State University",
+    "nickname": "Aggies",
+    "city": "New Mexico",
+    "state": "Presley Askew Field",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Sam Houston State University(Sam Houston)",
+    "nickname": "Bearkats",
+    "city": "Texas",
+    "state": "Don Sanders Stadium",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "Western Kentucky University(WKU)",
+    "nickname": "Hilltoppers",
+    "city": "Kentucky",
+    "state": "Nick Denes Field",
+    "conference": "Conference USA"
+  },
+  {
+    "school": "University of Wisconsin\u2013Milwaukee(Milwaukee)",
+    "nickname": "Panthers",
+    "city": "Wisconsin",
+    "state": "Franklin Field",
+    "conference": "Horizon League"
+  },
+  {
+    "school": "Northern Kentucky University",
+    "nickname": "Norse",
+    "city": "Kentucky",
+    "state": "Bill Aker Baseball Complex",
+    "conference": "Horizon League"
+  },
+  {
+    "school": "Oakland University",
+    "nickname": "Golden Grizzlies",
+    "city": "Michigan",
+    "state": "Oakland University Baseball Field",
+    "conference": "Horizon League"
+  },
+  {
+    "school": "Wright State University",
+    "nickname": "Raiders",
+    "city": "Ohio",
+    "state": "Nischwitz Stadium",
+    "conference": "Horizon League"
+  },
+  {
+    "school": "Youngstown State University",
+    "nickname": "Penguins",
+    "city": "Ohio",
+    "state": "Eastwood Field",
+    "conference": "Horizon League"
+  },
+  {
+    "school": "Oregon State University",
+    "nickname": "Beavers",
+    "city": "Oregon",
+    "state": "Goss Stadium at Coleman Field",
+    "conference": "Independent[a 8]"
+  },
+  {
+    "school": "Brown University",
+    "nickname": "Bears",
+    "city": "Rhode Island",
+    "state": "Murray Stadium",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Columbia University",
+    "nickname": "Lions",
+    "city": "New York",
+    "state": "Hal Robertson Field at Phillip Satow Stadium",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Cornell University",
+    "nickname": "Big Red",
+    "city": "New York",
+    "state": "Hoy Field",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Dartmouth College",
+    "nickname": "Big Green",
+    "city": "New Hampshire",
+    "state": "Red Rolfe Field at Biondi Park",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Harvard University",
+    "nickname": "Crimson",
+    "city": "Massachusetts",
+    "state": "Joseph J. O'Donnell Field",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "University of Pennsylvania(Penn)",
+    "nickname": "Quakers",
+    "city": "Pennsylvania",
+    "state": "Meiklejohn Stadium",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Princeton University",
+    "nickname": "Tigers",
+    "city": "New Jersey",
+    "state": "Bill Clarke Field",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Yale University",
+    "nickname": "Bulldogs",
+    "city": "Connecticut",
+    "state": "Yale Field",
+    "conference": "Ivy League"
+  },
+  {
+    "school": "Canisius University",
+    "nickname": "Golden Griffins",
+    "city": "New York",
+    "state": "Demske Sports Complex",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Fairfield University",
+    "nickname": "Stags",
+    "city": "Connecticut",
+    "state": "Alumni Baseball Diamond",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Iona University",
+    "nickname": "Gaels",
+    "city": "New York",
+    "state": "City Park",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Manhattan University",
+    "nickname": "Jaspers",
+    "city": "New York",
+    "state": "Clover Stadium",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Marist University",
+    "nickname": "Red Foxes",
+    "city": "New York",
+    "state": "James J. McCann Baseball Field",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Merrimack College",
+    "nickname": "Warriors",
+    "city": "Massachusetts",
+    "state": "Greater Lawrence Technical School",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Mount St. Mary's University",
+    "nickname": "Mountaineers",
+    "city": "Maryland",
+    "state": "Straw Family Stadium",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Niagara University",
+    "nickname": "Purple Eagles",
+    "city": "New York",
+    "state": "Sal Maglie Stadium",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Quinnipiac University",
+    "nickname": "Bobcats",
+    "city": "Connecticut",
+    "state": "Quinnipiac Baseball Field",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Rider University",
+    "nickname": "Broncs",
+    "city": "New Jersey",
+    "state": "Sonny Pittaro Field",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Sacred Heart University",
+    "nickname": "Pioneers",
+    "city": "Connecticut",
+    "state": "Veterans Memorial Park",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Saint Peter's University",
+    "nickname": "Peacocks",
+    "city": "New Jersey",
+    "state": "Joseph J. Jaroschak Field",
+    "conference": "MAAC"
+  },
+  {
+    "school": "Siena University",
+    "nickname": "Saints",
+    "city": "New York",
+    "state": "Siena Baseball Field",
+    "conference": "MAAC"
+  },
+  {
+    "school": "University of Akron",
+    "nickname": "Zips",
+    "city": "Ohio",
+    "state": "Skeeles Field",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Ball State University",
+    "nickname": "Cardinals",
+    "city": "Indiana",
+    "state": "Ball Diamond",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Bowling Green State University(Bowling Green)",
+    "nickname": "Falcons",
+    "city": "Ohio",
+    "state": "Steller Field",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Central Michigan University",
+    "nickname": "Chippewas",
+    "city": "Michigan",
+    "state": "Bill Theunissen Stadium",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Eastern Michigan University",
+    "nickname": "Eagles",
+    "city": "Michigan",
+    "state": "Oestrike Stadium",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Kent State University",
+    "nickname": "Golden Flashes",
+    "city": "Ohio",
+    "state": "Olga Mural Field at Schoonover Stadium",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "University of Massachusetts Amherst(Massachusetts/UMass)",
+    "nickname": "Minutemen",
+    "city": "Massachusetts",
+    "state": "Earl Lorden Field",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Miami University(Miami of Ohio)",
+    "nickname": "RedHawks",
+    "city": "Ohio",
+    "state": "Stanley G. McKie Field at Joseph P. Hayden Jr. Park",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Northern Illinois University(NIU)",
+    "nickname": "Huskies",
+    "city": "Illinois",
+    "state": "Ralph McKinzie Field",
+    "conference": "Mid-American[a 9]"
+  },
+  {
+    "school": "Ohio University",
+    "nickname": "Bobcats",
+    "city": "Ohio",
+    "state": "Bob Wren Stadium",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "University of Toledo",
+    "nickname": "Rockets",
+    "city": "Ohio",
+    "state": "Scott Park Baseball Complex",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Western Michigan University",
+    "nickname": "Broncos",
+    "city": "Michigan",
+    "state": "Robert J. Bobb Stadium at Judson Hyames Field",
+    "conference": "Mid-American"
+  },
+  {
+    "school": "Belmont University",
+    "nickname": "Bruins",
+    "city": "Tennessee",
+    "state": "E. S. Rose Park",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "Bradley University",
+    "nickname": "Braves",
+    "city": "Illinois",
+    "state": "Dozer Park",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "University of Evansville",
+    "nickname": "Purple Aces",
+    "city": "Indiana",
+    "state": "Charles H. Braun Stadium",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "Illinois State University",
+    "nickname": "Redbirds",
+    "city": "Illinois",
+    "state": "Duffy Bass Field",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "Indiana State University",
+    "nickname": "Sycamores",
+    "city": "Indiana",
+    "state": "Sycamore Stadium",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "Murray State University",
+    "nickname": "Racers",
+    "city": "Kentucky",
+    "state": "Reagan Field",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "Southern Illinois University Carbondale(Southern Illinois/SIU)",
+    "nickname": "Salukis",
+    "city": "Illinois",
+    "state": "Itchy Jones Stadium",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "University of Illinois Chicago(UIC)",
+    "nickname": "Flames",
+    "city": "Illinois",
+    "state": "Les Miller Field",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "Valparaiso University",
+    "nickname": "Beacons",
+    "city": "Indiana",
+    "state": "Emory G. Bauer Field",
+    "conference": "Missouri Valley"
+  },
+  {
+    "school": "United States Air Force Academy(Air Force)",
+    "nickname": "Falcons",
+    "city": "Colorado",
+    "state": "Erdle Field",
+    "conference": "Mountain West"
+  },
+  {
+    "school": "California State University, Fresno(Fresno State)",
+    "nickname": "Bulldogs",
+    "city": "California",
+    "state": "Pete Beiden Field",
+    "conference": "Mountain West[a 6]"
+  },
+  {
+    "school": "Grand Canyon University",
+    "nickname": "Antelopes",
+    "city": "Arizona",
+    "state": "Brazell Stadium",
+    "conference": "Mountain West"
+  },
+  {
+    "school": "University of Nevada, Reno(Nevada)",
+    "nickname": "Wolf Pack",
+    "city": "Nevada",
+    "state": "William Peccole Park",
+    "conference": "Mountain West"
+  },
+  {
+    "school": "University of New Mexico",
+    "nickname": "Lobos",
+    "city": "New Mexico",
+    "state": "Santa Ana Star Field",
+    "conference": "Mountain West"
+  },
+  {
+    "school": "San Diego State University",
+    "nickname": "Aztecs",
+    "city": "California",
+    "state": "Tony Gwynn Stadium",
+    "conference": "Mountain West[a 6]"
+  },
+  {
+    "school": "San Jose State University",
+    "nickname": "Spartans",
+    "city": "California",
+    "state": "San Jose Municipal Stadium",
+    "conference": "Mountain West"
+  },
+  {
+    "school": "University of Nevada, Las Vegas(UNLV)",
+    "nickname": "Rebels",
+    "city": "Nevada",
+    "state": "Earl Wilson Stadium",
+    "conference": "Mountain West"
+  },
+  {
+    "school": "Washington State University",
+    "nickname": "Cougars",
+    "city": "Washington",
+    "state": "Bailey-Brayton Field",
+    "conference": "Mountain West[a 10]"
+  },
+  {
+    "school": "Central Connecticut State University(Central Connecticut/CCSU)",
+    "nickname": "Blue Devils",
+    "city": "Connecticut",
+    "state": "Balf\u2013Savin Field",
+    "conference": "NEC"
+  },
+  {
+    "school": "Coppin State University",
+    "nickname": "Eagles",
+    "city": "Maryland",
+    "state": "Joe Cannon Stadium",
+    "conference": "NEC[a 11]"
+  },
+  {
+    "school": "Delaware State University",
+    "nickname": "Hornets",
+    "city": "Delaware",
+    "state": "Soldier Field",
+    "conference": "NEC[a 11]"
+  },
+  {
+    "school": "Fairleigh Dickinson University",
+    "nickname": "Knights",
+    "city": "New Jersey",
+    "state": "Naimoli Family Baseball Complex",
+    "conference": "NEC"
+  },
+  {
+    "school": "Long Island University(LIU)",
+    "nickname": "Sharks",
+    "city": "New York",
+    "state": "Long Island University Baseball Stadium",
+    "conference": "NEC"
+  },
+  {
+    "school": "University of Maryland Eastern Shore(UMES)",
+    "nickname": "Hawks",
+    "city": "Maryland",
+    "state": "Hawk Stadium",
+    "conference": "NEC[a 11]"
+  },
+  {
+    "school": "Norfolk State University",
+    "nickname": "Spartans",
+    "city": "Virginia",
+    "state": "Marty L. Miller Field",
+    "conference": "NEC[a 11]"
+  },
+  {
+    "school": "Stonehill College",
+    "nickname": "Skyhawks",
+    "city": "Massachusetts",
+    "state": "Lou Gorman Field",
+    "conference": "NEC"
+  },
+  {
+    "school": "Wagner College",
+    "nickname": "Seahawks",
+    "city": "New York",
+    "state": "Richmond County Bank Ballpark",
+    "conference": "NEC"
+  },
+  {
+    "school": "Eastern Illinois University",
+    "nickname": "Panthers",
+    "city": "Illinois",
+    "state": "Coaches Stadium at Monier Field",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "Lindenwood University",
+    "nickname": "Lions",
+    "city": "Missouri",
+    "state": "Lou Brock Sports Complex",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "University of Arkansas at Little Rock (Little Rock)",
+    "nickname": "Trojans",
+    "city": "Arkansas",
+    "state": "Gary Hogan Field",
+    "conference": "Ohio Valley[a 1]"
+  },
+  {
+    "school": "Morehead State University",
+    "nickname": "Eagles",
+    "city": "Kentucky",
+    "state": "Allen Field",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "Southeast Missouri State University(Southeast Missouri/SEMO)",
+    "nickname": "Redhawks",
+    "city": "Missouri",
+    "state": "Capaha Field",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "Southern Illinois University Edwardsville(SIU Edwardsville/SIUE)",
+    "nickname": "Cougars",
+    "city": "Illinois",
+    "state": "Roy E. Lee Field at Simmons Baseball Complex",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "University of Southern Indiana",
+    "nickname": "Screaming Eagles",
+    "city": "Indiana",
+    "state": "USI Baseball Field",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "University of Tennessee at Martin(UT Martin)",
+    "nickname": "Skyhawks",
+    "city": "Tennessee",
+    "state": "Skyhawk Park",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "Tennessee Tech University",
+    "nickname": "Golden Eagles",
+    "city": "Tennessee",
+    "state": "Bush Stadium at Averitt Express Baseball Complex",
+    "conference": "Ohio Valley[a 12]"
+  },
+  {
+    "school": "Western Illinois University",
+    "nickname": "Leathernecks",
+    "city": "Illinois",
+    "state": "Alfred D. Boyer Stadium",
+    "conference": "Ohio Valley"
+  },
+  {
+    "school": "United States Military Academy(Army)",
+    "nickname": "Black Knights",
+    "city": "New York",
+    "state": "Johnson Stadium at Doubleday Field",
+    "conference": "Patriot League"
+  },
+  {
+    "school": "Bucknell University",
+    "nickname": "Bison",
+    "city": "Pennsylvania",
+    "state": "Eugene B. Depew Field",
+    "conference": "Patriot League"
+  },
+  {
+    "school": "College of the Holy Cross",
+    "nickname": "Crusaders",
+    "city": "Massachusetts",
+    "state": "Hanover Insurance Park at Fitton Field",
+    "conference": "Patriot League"
+  },
+  {
+    "school": "Lafayette College",
+    "nickname": "Leopards",
+    "city": "Pennsylvania",
+    "state": "Kamine Stadium",
+    "conference": "Patriot League"
+  },
+  {
+    "school": "Lehigh University",
+    "nickname": "Mountain Hawks",
+    "city": "Pennsylvania",
+    "state": "Lehigh Baseball Field",
+    "conference": "Patriot League"
+  },
+  {
+    "school": "United States Naval Academy(Navy)",
+    "nickname": "Midshipmen",
+    "city": "Maryland",
+    "state": "Terwilliger Brothers Field at Max Bishop Stadium",
+    "conference": "Patriot League"
+  },
+  {
+    "school": "University of Alabama",
+    "nickname": "Crimson Tide",
+    "city": "Alabama",
+    "state": "Sewell\u2013Thomas Stadium",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Arkansas",
+    "nickname": "Razorbacks",
+    "city": "Arkansas",
+    "state": "Baum\u2013Walker Stadium",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "Auburn University",
+    "nickname": "Tigers",
+    "city": "Alabama",
+    "state": "Samford Stadium \u2013 Hitchcock Field at Plainsman Park",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Florida",
+    "nickname": "Gators",
+    "city": "Florida",
+    "state": "Condron Ballpark",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Georgia",
+    "nickname": "Bulldogs",
+    "city": "Georgia",
+    "state": "Foley Field",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Kentucky",
+    "nickname": "Wildcats",
+    "city": "Kentucky",
+    "state": "Kentucky Proud Park",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "Louisiana State University(LSU)",
+    "nickname": "Tigers",
+    "city": "Louisiana",
+    "state": "Alex Box Stadium, Skip Bertman Field",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Mississippi(Ole Miss)",
+    "nickname": "Rebels",
+    "city": "Mississippi",
+    "state": "Swayze Field",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "Mississippi State University",
+    "nickname": "Bulldogs",
+    "city": "Mississippi",
+    "state": "Dudy Noble Field, Polk-DeMent Stadium",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Missouri(alternately Mizzou)",
+    "nickname": "Tigers",
+    "city": "Missouri",
+    "state": "Taylor Stadium",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Oklahoma",
+    "nickname": "Sooners",
+    "city": "Oklahoma",
+    "state": "L. Dale Mitchell Baseball Park",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of South Carolina",
+    "nickname": "Gamecocks",
+    "city": "South Carolina",
+    "state": "Carolina Stadium",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Tennessee",
+    "nickname": "Volunteers",
+    "city": "Tennessee",
+    "state": "Lindsey Nelson Stadium",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "University of Texas at Austin(Texas)",
+    "nickname": "Longhorns",
+    "city": "Texas",
+    "state": "UFCU Disch\u2013Falk Field",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "Texas A&M University(TAMU)",
+    "nickname": "Aggies",
+    "city": "Texas",
+    "state": "Olsen Field at Blue Bell Park",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "Vanderbilt University",
+    "nickname": "Commodores",
+    "city": "Tennessee",
+    "state": "Hawkins Field",
+    "conference": "Southeastern"
+  },
+  {
+    "school": "The Citadel, The Military College of South Carolina(The Citadel)",
+    "nickname": "Bulldogs",
+    "city": "South Carolina",
+    "state": "Joseph P. Riley Jr. Park",
+    "conference": "Southern"
+  },
+  {
+    "school": "East Tennessee State University(ETSU)",
+    "nickname": "Buccaneers",
+    "city": "Tennessee",
+    "state": "Thomas Stadium",
+    "conference": "Southern"
+  },
+  {
+    "school": "Mercer University",
+    "nickname": "Bears",
+    "city": "Georgia",
+    "state": "Claude Smith Field",
+    "conference": "Southern"
+  },
+  {
+    "school": "Samford University",
+    "nickname": "Bulldogs",
+    "city": "Alabama",
+    "state": "Joe Lee Griffin Stadium",
+    "conference": "Southern"
+  },
+  {
+    "school": "University of North Carolina at Greensboro(UNC Greensboro/UNCG)",
+    "nickname": "Spartans",
+    "city": "North Carolina",
+    "state": "UNCG Baseball Stadium",
+    "conference": "Southern"
+  },
+  {
+    "school": "Virginia Military Institute(VMI)",
+    "nickname": "Keydets",
+    "city": "Virginia",
+    "state": "Gray\u2013Minor Stadium",
+    "conference": "Southern"
+  },
+  {
+    "school": "Western Carolina University",
+    "nickname": "Catamounts",
+    "city": "North Carolina",
+    "state": "Hennon Stadium",
+    "conference": "Southern"
+  },
+  {
+    "school": "Wofford College",
+    "nickname": "Terriers",
+    "city": "South Carolina",
+    "state": "Russell C. King Field",
+    "conference": "Southern"
+  },
+  {
+    "school": "Houston Christian University",
+    "nickname": "Huskies",
+    "city": "Texas",
+    "state": "Husky Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "University of the Incarnate Word(alternately UIW)",
+    "nickname": "Cardinals",
+    "city": "Texas",
+    "state": "Sullivan Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "Lamar University",
+    "nickname": "Cardinals",
+    "city": "Texas",
+    "state": "Vincent\u2013Beck Stadium",
+    "conference": "Southland"
+  },
+  {
+    "school": "McNeese State University(McNeese)",
+    "nickname": "Cowboys",
+    "city": "Louisiana",
+    "state": "Joe Miller Ballpark",
+    "conference": "Southland"
+  },
+  {
+    "school": "University of New Orleans",
+    "nickname": "Privateers",
+    "city": "Louisiana",
+    "state": "Maestri Field at Privateer Park",
+    "conference": "Southland"
+  },
+  {
+    "school": "Nicholls State University(Nicholls)",
+    "nickname": "Colonels",
+    "city": "Louisiana",
+    "state": "Ben Meyer Diamond at Ray E. Didier Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "Northwestern State University",
+    "nickname": "Demons",
+    "city": "Louisiana",
+    "state": "H. Alvin Brown\u2013C. C. Stroud Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "Southeastern Louisiana University",
+    "nickname": "Lions",
+    "city": "Louisiana",
+    "state": "Pat Kenelly Diamond at Alumni Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "Stephen F. Austin State University(Stephen F. Austin/SFA)",
+    "nickname": "Lumberjacks",
+    "city": "Texas",
+    "state": "Jaycees Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "Texas A&M University\u2013Corpus Christi",
+    "nickname": "Islanders",
+    "city": "Texas",
+    "state": "Chapman Field",
+    "conference": "Southland"
+  },
+  {
+    "school": "University of Texas Rio Grande Valley(UTRGV)",
+    "nickname": "Vaqueros",
+    "city": "Texas",
+    "state": "UTRGV Baseball Stadium",
+    "conference": "Southland"
+  },
+  {
+    "school": "Alabama A&M University",
+    "nickname": "Bulldogs",
+    "city": "Alabama",
+    "state": "Bulldog Field",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Alabama State University",
+    "nickname": "Hornets",
+    "city": "Alabama",
+    "state": "Wheeler\u2013Watkins Baseball Complex",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Alcorn State University",
+    "nickname": "Braves",
+    "city": "Mississippi",
+    "state": "Foster Baseball Field at McGowan Stadium",
+    "conference": "SWAC"
+  },
+  {
+    "school": "University of Arkansas at Pine Bluff(Arkansas\u2013Pine Bluff)",
+    "nickname": "Golden Lions",
+    "city": "Arkansas",
+    "state": "Torii Hunter Baseball Complex",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Bethune\u2013Cookman University",
+    "nickname": "Wildcats",
+    "city": "Florida",
+    "state": "Jackie Robinson Ballpark",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Florida Agricultural and Mechanical University(Florida A&M)",
+    "nickname": "Rattlers",
+    "city": "Florida",
+    "state": "Moore\u2013Kittles Field",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Grambling State University",
+    "nickname": "Tigers",
+    "city": "Louisiana",
+    "state": "Wilbert Ellis Field at Ralph Waldo Emerson Jones Park",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Jackson State University",
+    "nickname": "Tigers",
+    "city": "Mississippi",
+    "state": "Braddy Field",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Mississippi Valley State University",
+    "nickname": "Delta Devils",
+    "city": "Mississippi",
+    "state": "Magnolia Field",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Prairie View A&M University",
+    "nickname": "Panthers",
+    "city": "Texas",
+    "state": "John W. Tankersley Field",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Southern University",
+    "nickname": "Jaguars",
+    "city": "Louisiana",
+    "state": "Lee\u2013Hines Stadium",
+    "conference": "SWAC"
+  },
+  {
+    "school": "Texas Southern University",
+    "nickname": "Tigers",
+    "city": "Texas",
+    "state": "MacGregor Park",
+    "conference": "SWAC"
+  },
+  {
+    "school": "North Dakota State University",
+    "nickname": "Bison",
+    "city": "North Dakota",
+    "state": "Newman Outdoor Field",
+    "conference": "The Summit"
+  },
+  {
+    "school": "University of Northern Colorado",
+    "nickname": "Bears",
+    "city": "Colorado",
+    "state": "Jackson Field",
+    "conference": "The Summit[a 14]"
+  },
+  {
+    "school": "University of Nebraska Omaha(Omaha)",
+    "nickname": "Mavericks",
+    "city": "Nebraska",
+    "state": "Tal Anderson Field",
+    "conference": "The Summit"
+  },
+  {
+    "school": "Oral Roberts University",
+    "nickname": "Golden Eagles",
+    "city": "Oklahoma",
+    "state": "J. L. Johnson Stadium",
+    "conference": "The Summit"
+  },
+  {
+    "school": "University of St. Thomas",
+    "nickname": "Tommies",
+    "city": "Minnesota",
+    "state": "Koch Diamond",
+    "conference": "The Summit"
+  },
+  {
+    "school": "South Dakota State University",
+    "nickname": "Jackrabbits",
+    "city": "South Dakota",
+    "state": "Erv Huether Field",
+    "conference": "The Summit"
+  },
+  {
+    "school": "Appalachian State University",
+    "nickname": "Mountaineers",
+    "city": "North Carolina",
+    "state": "Beaver Field at Jim and Bettie Smith Stadium",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Arkansas State University",
+    "nickname": "Red Wolves",
+    "city": "Arkansas",
+    "state": "Tomlinson Stadium\u2013Kell Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Coastal Carolina University",
+    "nickname": "Chanticleers",
+    "city": "South Carolina",
+    "state": "Springs Brooks Stadium/Vrooman Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Georgia Southern University",
+    "nickname": "Eagles",
+    "city": "Georgia",
+    "state": "J. I. Clements Stadium",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Georgia State University",
+    "nickname": "Panthers",
+    "city": "Georgia",
+    "state": "Georgia State University Baseball Complex",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "James Madison University",
+    "nickname": "Dukes",
+    "city": "Virginia",
+    "state": "Eagle Field at Veterans Memorial Park",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "University of Louisiana at Lafayette(Louisiana)",
+    "nickname": "Ragin' Cajuns",
+    "city": "Louisiana",
+    "state": "M. L. Tigue Moore Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "University of Louisiana at Monroe(Louisiana\u2013Monroe/ULM)",
+    "nickname": "Warhawks",
+    "city": "Louisiana",
+    "state": "Warhawk Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Marshall University",
+    "nickname": "Thundering Herd",
+    "city": "West Virginia",
+    "state": "Jack Cook Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Old Dominion University",
+    "nickname": "Monarchs",
+    "city": "Virginia",
+    "state": "Bud Metheny Ballpark",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "University of South Alabama",
+    "nickname": "Jaguars",
+    "city": "Alabama",
+    "state": "Eddie Stanky Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "University of Southern Mississippi(Southern Miss)",
+    "nickname": "Golden Eagles",
+    "city": "Mississippi",
+    "state": "Pete Taylor Park",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Texas State University",
+    "nickname": "Bobcats",
+    "city": "Texas",
+    "state": "Bobcat Baseball Stadium",
+    "conference": "Sun Belt[a 6]"
+  },
+  {
+    "school": "Troy University",
+    "nickname": "Trojans",
+    "city": "Alabama",
+    "state": "Riddle-Pace Field",
+    "conference": "Sun Belt"
+  },
+  {
+    "school": "Gonzaga University",
+    "nickname": "Bulldogs",
+    "city": "Washington",
+    "state": "Washington Trust Field and Patterson Baseball Complex",
+    "conference": "West Coast[a 6]"
+  },
+  {
+    "school": "Loyola Marymount University(alternately LMU)",
+    "nickname": "Lions",
+    "city": "California",
+    "state": "George C. Page Stadium",
+    "conference": "West Coast"
+  },
+  {
+    "school": "University of the Pacific",
+    "nickname": "Tigers",
+    "city": "California",
+    "state": "Klein Family Field",
+    "conference": "West Coast"
+  },
+  {
+    "school": "Pepperdine University",
+    "nickname": "Waves",
+    "city": "California",
+    "state": "Eddy D. Field Stadium",
+    "conference": "West Coast"
+  },
+  {
+    "school": "University of Portland",
+    "nickname": "Pilots",
+    "city": "Oregon",
+    "state": "Joe Etzel Field",
+    "conference": "West Coast"
+  },
+  {
+    "school": "Saint Mary's College of California(Saint Mary's/SMC)",
+    "nickname": "Gaels",
+    "city": "California",
+    "state": "Louis Guisto Field",
+    "conference": "West Coast"
+  },
+  {
+    "school": "University of San Diego",
+    "nickname": "Toreros",
+    "city": "California",
+    "state": "John Cunningham Stadium",
+    "conference": "West Coast"
+  },
+  {
+    "school": "University of San Francisco",
+    "nickname": "Dons",
+    "city": "California",
+    "state": "Dante Benedetti Diamond at Max Ulrich Field",
+    "conference": "West Coast"
+  },
+  {
+    "school": "Santa Clara University",
+    "nickname": "Broncos",
+    "city": "California",
+    "state": "Stephen Schott Stadium",
+    "conference": "West Coast"
+  },
+  {
+    "school": "Seattle University",
+    "nickname": "Redhawks",
+    "city": "Washington",
+    "state": "Bannerwood Park",
+    "conference": "West Coast"
+  },
+  {
+    "school": "Abilene Christian University",
+    "nickname": "Wildcats",
+    "city": "Texas",
+    "state": "Crutcher Scott Field",
+    "conference": "Western Athletic[a 15]"
+  },
+  {
+    "school": "California Baptist University",
+    "nickname": "Lancers",
+    "city": "California",
+    "state": "James W. Totman Stadium",
+    "conference": "Western Athletic[a 16]"
+  },
+  {
+    "school": "California State University, Sacramento(Sacramento State)",
+    "nickname": "Hornets",
+    "city": "California",
+    "state": "John Smith Field",
+    "conference": "Western Athletic[a 17][a 16]"
+  },
+  {
+    "school": "Tarleton State University",
+    "nickname": "Texans",
+    "city": "Texas",
+    "state": "Cecil Ballow Baseball Complex",
+    "conference": "Western Athletic[a 15]"
+  },
+  {
+    "school": "University of Texas at Arlington(UT Arlington/UTA)",
+    "nickname": "Mavericks",
+    "city": "Texas",
+    "state": "Clay Gould Ballpark",
+    "conference": "Western Athletic[a 15]"
+  },
+  {
+    "school": "Utah Tech University",
+    "nickname": "Trailblazers",
+    "city": "Utah",
+    "state": "Bruce Hurst Field",
+    "conference": "Western Athletic[a 18]"
+  },
+  {
+    "school": "Utah Valley University",
+    "nickname": "Wolverines",
+    "city": "Utah",
+    "state": "UCCU Ballpark",
+    "conference": "Western Athletic[a 16]"
+  }
+]

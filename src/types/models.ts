@@ -1,14 +1,30 @@
 export type Handedness = 'L' | 'R' | 'S';
 export type PlayerRole = 'hitter' | 'pitcher' | 'two-way';
 export type ClassYear = 'FR' | 'SO' | 'JR' | 'SR';
+export type ArchetypeFamily =
+  | 'catchers'
+  | 'corner-infielders'
+  | 'middle-infielders'
+  | 'outfielders'
+  | 'designated-hitters'
+  | 'starters'
+  | 'relievers'
+  | 'two-way';
 export type PlayerArchetype =
-  | 'table-setter'
-  | 'slugger'
-  | 'contact-bat'
-  | 'glove-first'
-  | 'power-arm'
-  | 'command-arm'
-  | 'bullpen-fireman'
+  | 'catcher-defense-anchor'
+  | 'catcher-offense-first'
+  | 'corner-power-bat'
+  | 'corner-contact-bat'
+  | 'middle-glove-wizard'
+  | 'middle-table-setter'
+  | 'outfield-speed-defender'
+  | 'outfield-run-producer'
+  | 'dh-bat-first-masher'
+  | 'starter-power-ace'
+  | 'starter-command-artist'
+  | 'starter-groundball-machine'
+  | 'reliever-fireman'
+  | 'reliever-control-specialist'
   | 'two-way-star';
 export type Position =
   | 'C'
@@ -43,6 +59,21 @@ export type RecruitingActionId =
   | 'nil-presentation'
   | 'playing-time-pitch';
 export type RatingDisplayMode = '100' | '20-80' | 'stars';
+export type PersonalityType =
+  | 'captain'
+  | 'steady-pro'
+  | 'clubhouse-glue'
+  | 'quiet-worker'
+  | 'individualist'
+  | 'volatile-competitor';
+export type CoachRole = 'headCoach' | 'assistantHitting' | 'assistantPitching' | 'assistantDevelopment';
+
+export interface Location {
+  city: string;
+  state: string;
+  lat: number;
+  lon: number;
+}
 
 export interface OffenseRatings {
   contact: number;
@@ -85,6 +116,53 @@ export interface RosterStatus {
   certified: boolean;
 }
 
+export interface DevelopmentProfile {
+  ceilingReliability: number;
+  workEthic: number;
+  coachability: number;
+  consistency: number;
+  leadershipPotential: number;
+}
+
+export interface PersonalityProfile {
+  type: PersonalityType;
+  selfishness: number;
+  teamFirst: number;
+  competitiveDrive: number;
+  resilience: number;
+}
+
+export interface LeadershipProfile {
+  current: number;
+  potential: number;
+}
+
+export interface DevelopmentHistoryEntry {
+  year: number;
+  classYear: ClassYear;
+  overallBefore: number;
+  overallAfter: number;
+  potentialBefore: number;
+  potentialAfter: number;
+  coachFit: number;
+  performanceScore: number;
+  healthScore: number;
+  moraleScore: number;
+  chemistryScore: number;
+  summary: string;
+}
+
+export interface SeasonDevelopmentContext {
+  inSeasonProgress: number;
+  coachFit: number;
+  performanceScore: number;
+  healthScore: number;
+  moraleScore: number;
+  playingTimeScore: number;
+  chemistryScore: number;
+  note: string;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -106,6 +184,11 @@ export interface Player {
   morale: number;
   durability: number;
   developmentCurve: number;
+  developmentProfile: DevelopmentProfile;
+  personalityProfile: PersonalityProfile;
+  leadership: LeadershipProfile;
+  developmentHistory: DevelopmentHistoryEntry[];
+  seasonDevelopmentContext: SeasonDevelopmentContext;
   preferences: PlayerPreferences;
   offense?: OffenseRatings;
   defense?: DefenseRatings;
@@ -113,16 +196,29 @@ export interface Player {
   rosterStatus: RosterStatus;
 }
 
-export interface PrestigeHistorySummary {
-  avgRpiRank: number;
-  topEightRpiFinishes: number;
-  nationalTitles: number;
-  cwsFinals: number;
-  cwsTrips: number;
-  superRegionalTrips: number;
-  regionalTrips: number;
-  recentTrend: number;
+export type LeagueRosters = Record<string, Player[]>;
+
+export interface Coach {
+  id: string;
+  name: string;
+  role: CoachRole;
+  overall: number;
+  leadership: number;
+  developmentRatings: Record<ArchetypeFamily, number>;
+  injuryPrevention: number;
+  moraleSupport: number;
+  recruitingSupport: number;
 }
+
+export interface CoachingStaff {
+  headCoach: Coach;
+  assistantHitting: Coach;
+  assistantPitching: Coach;
+  assistantDevelopment: Coach;
+}
+
+export type LeagueCoachingStaffs = Record<string, CoachingStaff>;
+
 
 export interface PrestigeProfile {
   overall: number;
@@ -131,7 +227,7 @@ export interface PrestigeProfile {
   nilAttractiveness: number;
   conferenceModifier: number;
   momentumModifier: number;
-  history: PrestigeHistorySummary;
+
 }
 
 export interface ProgramResources {
@@ -147,6 +243,7 @@ export interface Program {
   nickname: string;
   conference: string;
   region: string;
+  location: Location;
   colors: {
     primary: string;
     secondary: string;
@@ -154,21 +251,26 @@ export interface Program {
   conferenceTier: number;
   parkFactor: number;
   travelDifficulty: number;
+  prestigeLevel: number;
   resources: ProgramResources;
   prestige: PrestigeProfile;
 }
+
+export type Dealbreaker = 'proximity' | 'playingTime' | 'prestige' | 'nil' | 'development' | 'none';
 
 export interface Recruit {
   id: string;
   name: string;
   primaryPosition: Position;
-  region: string;
+  archetype: PlayerArchetype;
+  hometown: Location;
   stars: 2 | 3 | 4 | 5;
   interest: number;
   signability: number;
   developmentCurve: number;
   marketability: number;
   preferences: PlayerPreferences;
+  dealbreaker: Dealbreaker;
   offense?: OffenseRatings;
   defense?: DefenseRatings;
   pitching?: PitchingRatings;
@@ -182,6 +284,8 @@ export interface Recruit {
     nilValue: number;
   };
   committedProgramId?: string;
+  userScore?: number;
+  topSchools?: { programId: string; score: number }[];
 }
 
 export interface TransferPortalEntry {
@@ -189,6 +293,10 @@ export interface TransferPortalEntry {
   player: Player;
   originProgramId: string;
   destinationProgramId?: string;
+  reason?: string;
+  originStayScore?: number;
+  coachChange?: boolean;
+  topDestinations?: { programId: string; score: number }[];
   askingSchoolNil: number;
   askingScholarshipPct: number;
   interest: number;
@@ -426,6 +534,13 @@ export interface RecruitingNeed {
   urgency: number;
 }
 
+export interface ProgramStrategyProfile {
+  programId: string;
+  offenseFocus: 'contact' | 'power' | 'speed' | 'balanced';
+  pitchingFocus: 'power-arms' | 'command' | 'bullpen' | 'balanced';
+  identitySummary: string;
+}
+
 export interface FranchiseSettings {
   ratingDisplay: RatingDisplayMode;
 }
@@ -439,6 +554,9 @@ export interface FranchiseSave {
   userProgramId: string;
   seasonStructure: SeasonStructure;
   roster: Player[];
+  leagueRosters: LeagueRosters;
+  leagueCoachingStaffs: LeagueCoachingStaffs;
+  leagueStrategyProfiles: Record<string, ProgramStrategyProfile>;
   recruits: Recruit[];
   portalEntries: TransferPortalEntry[];
   nilDeals: NILDeal[];
