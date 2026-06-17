@@ -1523,10 +1523,10 @@ function App() {
                             <div className="mini-table__row"><span>Offense</span><strong>CON {recruit.offense.contact} • POW {recruit.offense.power} • EYE {recruit.offense.eye}</strong></div>
                           )}
                           {recruit.pitching && (
-                            <div className="mini-table__row"><span>Pitching</span><strong>STU {recruit.pitching.stuff} • CTL {recruit.pitching.control} • STA {recruit.pitching.stamina}</strong></div>
+                            <div className="mini-table__row"><span>Pitching</span><strong>STU {recruit.pitching.stuff} • CMD {recruit.pitching.command} • STA {recruit.pitching.stamina}</strong></div>
                           )}
                           {recruit.defense && (
-                            <div className="mini-table__row"><span>Defense</span><strong>FLD {recruit.defense.fielding} • ARM {recruit.defense.arm} • SPD {recruit.defense.speed}</strong></div>
+                            <div className="mini-table__row"><span>Defense</span><strong>DEF {recruit.defense.defense} • ARM {recruit.defense.arm}</strong></div>
                           )}
                           <div className="mini-table__row"><span>Likely to Sign</span><strong>{recruit.signability}</strong></div>
                         </div>
