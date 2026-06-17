@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRightLeft,
   BadgeDollarSign,
@@ -6,7 +6,6 @@ import {
   BookOpen,
   CalendarDays,
   CircleAlert,
-  Flag,
   FolderKanban,
   GraduationCap,
   Mail,
@@ -15,12 +14,18 @@ import {
   Sparkles,
   Swords,
   Table2,
+  Trophy,
   Users,
 } from 'lucide-react';
-import { createRosterForProgram, findProgram, programs } from './data/programs';
-import { createProgramSchedule } from './engine/simulator';
-import { selectSeasonOutlook, useFranchiseStore } from './state/franchiseStore';
+import { findProgram, programs } from './data/programs';
+import { createProgramSchedule, getNextScheduledDayNumber, getProgramSeasonSchedule, getScheduledProgramGameForDay } from './engine/simulator';
+import { buildTeamChemistryProfile, calculateCoachFit, getArchetypeDefinition, getProgramDevelopmentIdentity } from './lib/playerDevelopment';
+import { buildSeasonSnapshot, calculateRecruitProgramFit, calculateSchoolGrades, getProgramRosterFromSave, getProgramStaffFromSave, selectSeasonOutlook, useFranchiseStore } from './state/franchiseStore';
 import type {
+  CoachRole,
+  LeagueCoachingStaffs,
+  LeagueRosters,
+  LeagueSeasonSnapshot,
   Player,
   PlayerBattingLine,
   PlayerFieldingLine,
@@ -33,7 +38,7 @@ import type {
 } from './types/models';
 
 const tabs: Array<{
-  id: 'overview' | 'mail' | 'roster' | 'player' | 'recruiting' | 'portal' | 'nil' | 'calendar' | 'settings' | 'preview' | 'stats';
+  id: 'overview' | 'mail' | 'roster' | 'player' | 'recruiting' | 'portal' | 'nil' | 'calendar' | 'settings' | 'preview' | 'stats' | 'polls';
   label: string;
   icon: typeof Users;
   group: 'Manager' | 'NCAA' | 'Team' | 'Hidden';
@@ -42,6 +47,7 @@ const tabs: Array<{
   { id: 'preview', label: 'Day View', icon: Swords, group: 'Manager' },
   { id: 'mail', label: 'Mail', icon: Mail, group: 'Manager' },
   { id: 'stats', label: 'League Overview', icon: BarChart3, group: 'NCAA' },
+  { id: 'polls', label: 'National Polls', icon: Trophy, group: 'NCAA' },
   { id: 'recruiting', label: 'Recruiting', icon: GraduationCap, group: 'NCAA' },
   { id: 'calendar', label: 'Conference Standings', icon: Table2, group: 'NCAA' },
   { id: 'overview', label: 'Team Overview', icon: FolderKanban, group: 'Team' },
@@ -116,6 +122,32 @@ function scoreLabel(value: number, thresholds: [number, string][]) {
     if (value >= cutoff) return label;
   }
   return thresholds[thresholds.length - 1]?.[1] ?? '';
+}
+
+function leadershipLabel(value: number) {
+  return scoreLabel(value, [[85, 'Captain'], [72, 'Leader'], [58, 'Support'], [0, 'Quiet']]);
+}
+
+function selfishnessLabel(value: number) {
+  return scoreLabel(value, [[78, 'High-maintenance'], [62, 'Individualist'], [45, 'Balanced'], [0, 'Team-first']]);
+}
+
+function personalityLabel(type: Player['personalityProfile']['type']) {
+  return type.replace(/-/g, ' ');
+}
+
+function coachRoleLabel(role: CoachRole) {
+  if (role === 'headCoach') return 'Head Coach';
+  if (role === 'assistantHitting') return 'Hitting Coach';
+  if (role === 'assistantPitching') return 'Pitching Coach';
+  return 'Development Coach';
+}
+
+function coachRoleShortLabel(role: CoachRole) {
+  if (role === 'headCoach') return 'HC';
+  if (role === 'assistantHitting') return 'Hit';
+  if (role === 'assistantPitching') return 'Pitch';
+  return 'Dev';
 }
 
 function interestLabel(value: number) {
@@ -315,21 +347,486 @@ interface ConferenceStandingLine {
   runsAllowed: number;
 }
 
+interface DayViewAction {
+  id: string;
+  label: string;
+  description: string;
+  icon: typeof Users;
+  tone?: 'primary' | 'default' | 'ghost';
+  onClick: () => void;
+}
+
+interface RankingRow {
+  rank: number;
+  previousRank: number | null;
+  trend: number;
+  programId: string;
+  record: string;
+  note: string;
+  score: number;
+  sortMetric: string;
+}
+
+interface RankingBoard {
+  title: string;
+  subtitle: string;
+  metricLabel: string;
+  rows: RankingRow[];
+  receivingVotes: RankingRow[];
+}
+
+interface TeamResumeMetrics {
+  programId: string;
+  wins: number;
+  losses: number;
+  games: number;
+  winPct: number;
+  runsScored: number;
+  runsAllowed: number;
+  runDiff: number;
+  runDiffPerGame: number;
+  owp: number;
+  oowp: number;
+  rpi: number;
+  qualityWins: number;
+  eliteWins: number;
+  badLosses: number;
+  roadWins: number;
+  homeLosses: number;
+  recentWins: number;
+  recentLosses: number;
+  streak: number;
+  preseasonBias: number;
+  preseasonWeight: number;
+}
+
+const PRESEASON_POLL_BIAS_BY_SCHOOL: Record<string, number> = {
+  LSU: 100,
+  Texas: 98,
+  'Mississippi State University': 95,
+  'University of Arkansas': 94,
+  'Auburn University': 92,
+  'University of Tennessee': 90,
+  'University of Florida': 88,
+  'Vanderbilt University': 86,
+  'University of Georgia': 84,
+  'Ole Miss': 82,
+  'University of Kentucky': 78,
+  'Texas A&M': 76,
+  'University of Oklahoma': 74,
+  'Georgia Tech': 83,
+  'North Carolina/Carolina': 82,
+  'Florida State University': 81,
+  Louisville: 78,
+  'Clemson University': 76,
+  'NC State': 74,
+  'University of Virginia': 73,
+  'University of Miami': 71,
+  'Wake Forest University': 69,
+  'Stanford University': 66,
+  TCU: 80,
+  'University of Arizona': 76,
+  'Arizona State University': 73,
+  'Oklahoma State University': 71,
+  'West Virginia University': 69,
+  'East Carolina University': 75,
+  UTSA: 72,
+  Charlotte: 69,
+  'Coastal Carolina University': 77,
+  'Southern Miss': 74,
+  Troy: 70,
+  'University of Oregon': 68,
+  UCLA: 82,
+  'Oregon State University': 80,
+  'University of California, Irvine': 64,
+};
+
+function clampFloor(value: number, floor = 0) {
+  return Number.isFinite(value) ? Math.max(floor, value) : floor;
+}
+
+function roundMetric(value: number, digits = 3) {
+  return Number(value.toFixed(digits));
+}
+
+function formatMetric(value: number, digits = 3) {
+  return value.toFixed(digits);
+}
+
+function formatTrend(trend: number) {
+  if (trend > 0) return `+${trend}`;
+  if (trend < 0) return `${trend}`;
+  return '—';
+}
+
+function preseasonPollBias(program: { school: string; conference: string; conferenceTier: number; prestige: { overall: number } }) {
+  const explicitBias = PRESEASON_POLL_BIAS_BY_SCHOOL[program.school];
+  if (explicitBias !== undefined) {
+    return explicitBias;
+  }
+
+  // Keep unloved or randomly inflated teams from jumping the poll before games exist.
+  const conferenceFloor =
+    program.conference === 'SEC' ? 54
+      : program.conference === 'Atlantic Coast' ? 51
+      : program.conference === 'Big 12' ? 48
+      : program.conference === 'Big Ten' ? 36
+      : program.conference === 'Sun Belt' ? 34
+      : program.conference === 'American' ? 32
+      : program.conference === 'Big West' ? 28
+      : 22;
+  return Math.min(70, conferenceFloor + Math.max(0, (program.prestige.overall - 70) * 0.22));
+}
+
+function projectedRosterStrength(roster: Player[]) {
+  const hitters = roster
+    .filter((player) => player.offense)
+    .sort((left, right) => scoreProjectedHitter(right) - scoreProjectedHitter(left))
+    .slice(0, 9);
+  const pitchers = roster
+    .filter((player) => player.pitching)
+    .sort((left, right) => scoreProjectedPitcher(right) - scoreProjectedPitcher(left));
+
+  const lineupScore = hitters.length
+    ? hitters.reduce((sum, player) => sum + scoreProjectedHitter(player), 0) / hitters.length
+    : 50;
+  const rotationScore = pitchers.slice(0, 3).length
+    ? pitchers.slice(0, 3).reduce((sum, player) => sum + scoreProjectedPitcher(player), 0) / pitchers.slice(0, 3).length
+    : 50;
+  const bullpenScore = pitchers.slice(3, 8).length
+    ? pitchers.slice(3, 8).reduce((sum, player) => sum + scoreProjectedPitcher(player), 0) / pitchers.slice(3, 8).length
+    : rotationScore;
+
+  return roundMetric(lineupScore * 0.46 + rotationScore * 0.36 + bullpenScore * 0.18, 2);
+}
+
+function coachingStrength(programId: string, coachingStaffs: LeagueCoachingStaffs) {
+  const staff = coachingStaffs[programId];
+  if (!staff) return 50;
+  const coaches = [staff.headCoach, staff.assistantHitting, staff.assistantPitching, staff.assistantDevelopment];
+  return roundMetric(
+    coaches.reduce((sum, coach) => sum + coach.overall + coach.leadership * 0.2 + coach.recruitingSupport * 0.1, 0) / coaches.length,
+    2,
+  );
+}
+
+function buildRankingBoards(
+  teamStats: LeagueSeasonSnapshot['teamStats'],
+  completedLeagueGames: Array<{ dayNumber: number; result: NonNullable<SeasonGameRecord['result']> }>,
+  leagueRosters: LeagueRosters,
+  leagueCoachingStaffs: LeagueCoachingStaffs,
+) {
+  const allPrograms = programs.map((program) => {
+    const seasonLine = teamStats.find((line) => line.programId === program.id);
+    return {
+      program,
+      seasonLine: seasonLine ?? {
+        programId: program.id,
+        wins: 0,
+        losses: 0,
+        runsScored: 0,
+        runsAllowed: 0,
+        hits: 0,
+        homeRuns: 0,
+        walks: 0,
+        strikeouts: 0,
+        era: 0,
+        whip: 0,
+        errors: 0,
+      },
+      rosterStrength: projectedRosterStrength((leagueRosters || {})[program.id] ?? []),
+      coachScore: coachingStrength(program.id, leagueCoachingStaffs || {}),
+    };
+  });
+
+  const lineByProgramId = new Map(allPrograms.map((entry) => [entry.program.id, entry.seasonLine]));
+  const gamesByProgram = new Map<string, Array<{
+    opponentId: string;
+    won: boolean;
+    wasHome: boolean;
+    opponentWinPct: number;
+    dayNumber: number;
+  }>>();
+  const opponentFrequency = new Map<string, Map<string, number>>();
+
+  for (const entry of allPrograms) {
+    gamesByProgram.set(entry.program.id, []);
+    opponentFrequency.set(entry.program.id, new Map());
+  }
+
+  for (const game of completedLeagueGames) {
+    const homeRuns = totalRunsByInning(game.result.homeSummary.runsByInning);
+    const awayRuns = totalRunsByInning(game.result.awaySummary.runsByInning);
+    const homeList = gamesByProgram.get(game.result.homeProgramId);
+    const awayList = gamesByProgram.get(game.result.awayProgramId);
+    const homeCounts = opponentFrequency.get(game.result.homeProgramId);
+    const awayCounts = opponentFrequency.get(game.result.awayProgramId);
+
+    homeList?.push({
+      opponentId: game.result.awayProgramId,
+      won: homeRuns > awayRuns,
+      wasHome: true,
+      opponentWinPct: 0,
+      dayNumber: game.dayNumber,
+    });
+    awayList?.push({
+      opponentId: game.result.homeProgramId,
+      won: awayRuns > homeRuns,
+      wasHome: false,
+      opponentWinPct: 0,
+      dayNumber: game.dayNumber,
+    });
+
+    homeCounts?.set(game.result.awayProgramId, (homeCounts.get(game.result.awayProgramId) ?? 0) + 1);
+    awayCounts?.set(game.result.homeProgramId, (awayCounts.get(game.result.homeProgramId) ?? 0) + 1);
+  }
+
+  function adjustedOpponentWinPct(opponentId: string, teamId: string) {
+    const opponentLine = lineByProgramId.get(opponentId);
+    if (!opponentLine) return 0;
+    const opponentGames = gamesByProgram.get(opponentId) ?? [];
+    const filtered = opponentGames.filter((game) => game.opponentId !== teamId);
+    if (!filtered.length) {
+      const games = opponentLine.wins + opponentLine.losses;
+      return games ? opponentLine.wins / games : 0;
+    }
+    const wins = filtered.filter((game) => game.won).length;
+    return wins / filtered.length;
+  }
+
+  const owpByProgram = new Map<string, number>();
+  for (const entry of allPrograms) {
+    const counts = opponentFrequency.get(entry.program.id) ?? new Map();
+    let weightedOppWins = 0;
+    let weightedOppGames = 0;
+    for (const [opponentId, meetings] of counts.entries()) {
+      weightedOppWins += adjustedOpponentWinPct(opponentId, entry.program.id) * meetings;
+      weightedOppGames += meetings;
+    }
+    owpByProgram.set(entry.program.id, weightedOppGames ? weightedOppWins / weightedOppGames : 0);
+  }
+
+  const metricsByProgram = new Map<string, TeamResumeMetrics>();
+  for (const entry of allPrograms) {
+    const seasonLine = entry.seasonLine;
+    const games = gamesByProgram.get(entry.program.id) ?? [];
+    const sortedGames = [...games].sort((left, right) => right.dayNumber - left.dayNumber);
+    const recentSlice = sortedGames.slice(0, 10);
+    const recentWins = recentSlice.filter((game) => game.won).length;
+    const recentLosses = recentSlice.length - recentWins;
+    let streak = 0;
+    if (sortedGames.length) {
+      const targetResult = sortedGames[0]!.won;
+      for (const game of sortedGames) {
+        if (game.won !== targetResult) break;
+        streak += targetResult ? 1 : -1;
+      }
+    }
+
+    const counts = opponentFrequency.get(entry.program.id) ?? new Map();
+    let weightedOowp = 0;
+    let weightedGames = 0;
+    for (const [opponentId, meetings] of counts.entries()) {
+      weightedOowp += (owpByProgram.get(opponentId) ?? 0) * meetings;
+      weightedGames += meetings;
+    }
+
+    const opponentWinPctByTeam = new Map<string, number>();
+    for (const [opponentId] of counts.entries()) {
+      const line = lineByProgramId.get(opponentId);
+      const pct = line ? line.wins / Math.max(1, line.wins + line.losses) : 0;
+      opponentWinPctByTeam.set(opponentId, pct);
+    }
+
+    const qualityWins = games.filter((game) => game.won && (opponentWinPctByTeam.get(game.opponentId) ?? 0) >= 0.55).length;
+    const eliteWins = games.filter((game) => game.won && (opponentWinPctByTeam.get(game.opponentId) ?? 0) >= 0.67).length;
+    const badLosses = games.filter((game) => !game.won && (opponentWinPctByTeam.get(game.opponentId) ?? 0) <= 0.42).length;
+    const roadWins = games.filter((game) => !game.wasHome && game.won).length;
+    const homeLosses = games.filter((game) => game.wasHome && !game.won).length;
+    const gamesPlayed = seasonLine.wins + seasonLine.losses;
+    const winPct = seasonLine.wins / Math.max(1, gamesPlayed);
+    const owp = owpByProgram.get(entry.program.id) ?? 0;
+    const oowp = weightedGames ? weightedOowp / weightedGames : 0;
+    const rpi = 0.25 * winPct + 0.5 * owp + 0.25 * oowp;
+    const preseasonBias = preseasonPollBias(entry.program);
+    const preseasonWeight = Math.max(0, 1 - gamesPlayed / 16);
+
+    metricsByProgram.set(entry.program.id, {
+      programId: entry.program.id,
+      wins: seasonLine.wins,
+      losses: seasonLine.losses,
+      games: gamesPlayed,
+      winPct,
+      runsScored: seasonLine.runsScored,
+      runsAllowed: seasonLine.runsAllowed,
+      runDiff: seasonLine.runsScored - seasonLine.runsAllowed,
+      runDiffPerGame: gamesPlayed ? (seasonLine.runsScored - seasonLine.runsAllowed) / gamesPlayed : 0,
+      owp,
+      oowp,
+      rpi,
+      qualityWins,
+      eliteWins,
+      badLosses,
+      roadWins,
+      homeLosses,
+      recentWins,
+      recentLosses,
+      streak,
+      preseasonBias,
+      preseasonWeight,
+    });
+  }
+
+  const previousOrdering = [...allPrograms]
+    .sort((left, right) => {
+      const leftMetrics = metricsByProgram.get(left.program.id)!;
+      const rightMetrics = metricsByProgram.get(right.program.id)!;
+      return (
+        (rightMetrics?.winPct ?? 0) - (leftMetrics?.winPct ?? 0)
+        || (rightMetrics?.qualityWins ?? 0) - (leftMetrics?.qualityWins ?? 0)
+        || (rightMetrics?.preseasonBias ?? 0) - (leftMetrics?.preseasonBias ?? 0)
+        || (right?.rosterStrength ?? 0) - (left?.rosterStrength ?? 0)
+      );
+    })
+    .map((entry) => entry.program.id);
+  const previousRankByProgram = new Map(previousOrdering.map((programId, index) => [programId, index + 1]));
+
+  function buildBoard(
+    title: string,
+    subtitle: string,
+    metricLabel: string,
+    scoreForProgram: (entry: (typeof allPrograms)[number], metrics: TeamResumeMetrics) => number,
+    noteForProgram: (entry: (typeof allPrograms)[number], metrics: TeamResumeMetrics) => string,
+    sortMetricForProgram: (entry: (typeof allPrograms)[number], metrics: TeamResumeMetrics) => string,
+  ): RankingBoard {
+    const ordered = [...allPrograms]
+      .map((entry) => {
+        const metrics = metricsByProgram.get(entry.program.id)!;
+        return {
+          entry,
+          metrics,
+          score: scoreForProgram(entry, metrics),
+        };
+      })
+      .sort((left, right) => (right?.score ?? 0) - (left?.score ?? 0) || (right?.metrics?.winPct ?? 0) - (left?.metrics?.winPct ?? 0) || (right?.metrics?.preseasonBias ?? 0) - (left?.metrics?.preseasonBias ?? 0));
+
+    const rows = ordered.slice(0, 25).map(({ entry, metrics, score }, index) => {
+      const previousRank = metrics.games === 0 ? null : (previousRankByProgram.get(entry.program.id) ?? null);
+      const currentRank = index + 1;
+      const trend = previousRank ? previousRank - currentRank : 0;
+      return {
+        rank: currentRank,
+        previousRank,
+        trend,
+        programId: entry.program.id,
+        record: `${metrics.wins}-${metrics.losses}`,
+        note: noteForProgram(entry, metrics),
+        score,
+        sortMetric: sortMetricForProgram(entry, metrics),
+      };
+    });
+
+    const receivingVotes = ordered.slice(25, 35).map(({ entry, metrics, score }, index) => ({
+      rank: 26 + index,
+      previousRank: previousRankByProgram.get(entry.program.id) ?? null,
+      trend: 0,
+      programId: entry.program.id,
+      record: `${metrics.wins}-${metrics.losses}`,
+      note: noteForProgram(entry, metrics),
+      score,
+      sortMetric: sortMetricForProgram(entry, metrics),
+    }));
+
+    return {
+      title,
+      subtitle,
+      metricLabel,
+      rows,
+      receivingVotes,
+    };
+  }
+
+  const apBoard = buildBoard(
+    'AP Top 25',
+    'Writers lean into resume, storylines, road wins, and brand gravity.',
+    'Score',
+    (entry, metrics) => (
+      (metrics?.winPct ?? 0) * 100
+      + (metrics?.owp ?? 0) * 28
+      + (metrics?.oowp ?? 0) * 12
+      + (metrics?.runDiffPerGame ?? 0) * 4.4
+      + (metrics?.qualityWins ?? 0) * 2.8
+      + (metrics?.eliteWins ?? 0) * 2.5
+      + (metrics?.roadWins ?? 0) * 1.1
+      + Math.max(0, metrics?.streak ?? 0) * 0.9
+      - (metrics?.badLosses ?? 0) * 2.6
+      - (metrics?.homeLosses ?? 0) * 0.55
+      + (metrics?.preseasonBias ?? 0) * (metrics?.preseasonWeight ?? 0) * 0.62
+      + (entry?.program?.prestige?.overall ?? 0) * 0.04
+      + (entry?.program?.conferenceTier ?? 0) * 0.08
+      + (entry?.rosterStrength ?? 0) * 0.06
+    ),
+    (entry, metrics) => `${entry?.program?.conference ?? 'IND'} • ${metrics?.qualityWins ?? 0} QW • ${metrics?.roadWins ?? 0} road W`,
+    (_entry, metrics) => formatMetric((metrics?.winPct ?? 0) * 100, 1),
+  );
+
+  const coachesBoard = buildBoard(
+    'Coaches Poll',
+    'Coaches reward roster quality, pitching depth, consistency, and fewer bad weekends.',
+    'Score',
+    (entry, metrics) => (
+      (metrics?.winPct ?? 0) * 100
+      + (metrics?.owp ?? 0) * 24
+      + (metrics?.oowp ?? 0) * 10
+      + (metrics?.runDiffPerGame ?? 0) * 3.2
+      + (metrics?.qualityWins ?? 0) * 2.1
+      + (metrics?.eliteWins ?? 0) * 1.9
+      - (metrics?.badLosses ?? 0) * 2.2
+      - (metrics?.homeLosses ?? 0) * 0.65
+      + (metrics?.preseasonBias ?? 0) * (metrics?.preseasonWeight ?? 0) * 0.72
+      + (entry?.rosterStrength ?? 0) * 0.28
+      + (entry?.coachScore ?? 0) * 0.22
+      + (entry?.program?.prestige?.developmentReputation ?? 0) * 0.03
+      + clampFloor((metrics?.recentWins ?? 0) - (metrics?.recentLosses ?? 0), -10) * 0.55
+    ),
+    (entry, metrics) => `${entry?.program?.conference ?? 'IND'} • staff ${Math.round(entry?.coachScore ?? 0)} • ${metrics?.recentWins ?? 0}-${metrics?.recentLosses ?? 0} last 10`,
+    (_entry, metrics) => formatMetric((metrics?.winPct ?? 0) * 100, 1),
+  );
+
+  const rpiBoard = buildBoard(
+    'RPI',
+    '25% team record, 50% opponents, 25% opponents’ opponents.',
+    'RPI',
+    (_entry, metrics) => metrics?.rpi ?? 0,
+    (entry, metrics) => `${entry?.program?.conference ?? 'IND'} • OWP ${formatMetric(metrics?.owp ?? 0)} • OOWP ${formatMetric(metrics?.oowp ?? 0)}`,
+    (_entry, metrics) => formatMetric(metrics?.rpi ?? 0),
+  );
+
+  return {
+    apBoard,
+    coachesBoard,
+    rpiBoard,
+    metricsByProgram,
+  };
+}
+
 function transferOutlookForPlayer(player: Player, roster: Player[]): MoraleProfile {
   const samePosition = roster
     .filter((entry) => entry.primaryPosition === player.primaryPosition)
     .sort((left, right) => right.overall - left.overall);
   const depthRank = Math.max(1, samePosition.findIndex((entry) => entry.id === player.id) + 1);
+  const chemistry = buildTeamChemistryProfile(roster);
   const scholarshipBoost = Math.min(14, Math.round(player.rosterStatus.scholarshipPct / 5));
   const nilBoost = Math.min(10, Math.round(player.rosterStatus.schoolNilValue / 4000));
   const depthBoost = depthRank === 1 ? 10 : depthRank === 2 ? 5 : depthRank <= 4 ? 1 : -6;
   const classBoost = player.classYear === 'SR' ? 8 : player.classYear === 'JR' ? 4 : player.classYear === 'FR' ? -3 : 0;
   const dissatisfactionPenalty = player.overall >= 78 && player.rosterStatus.scholarshipPct <= 10 ? 10 : 0;
+  const chemistryBoost = Math.round((chemistry.score - 55) / 4) + Math.round((player.leadership.current - player.personalityProfile.selfishness) / 12);
   const stayScore = Math.max(
     1,
     Math.min(
       99,
-      player.morale + scholarshipBoost + nilBoost + depthBoost + classBoost - dissatisfactionPenalty,
+      player.morale + scholarshipBoost + nilBoost + depthBoost + classBoost + chemistryBoost - dissatisfactionPenalty,
     ),
   );
 
@@ -337,6 +834,7 @@ function transferOutlookForPlayer(player: Player, roster: Player[]): MoraleProfi
     player.rosterStatus.scholarshipPct >= 40 ? 'Strong scholarship support helps anchor him to campus.' : 'Light scholarship support leaves room for outside pressure.',
     depthRank <= 2 ? `Projected ${depthRank === 1 ? 'starter' : 'top rotation/depth'} role supports playing-time confidence.` : 'Depth-chart squeeze could push him to look for a clearer role.',
     player.rosterStatus.schoolNilValue >= 12000 ? 'School NIL package is competitive for his current market.' : 'NIL package is modest enough that other schools could test it.',
+    chemistry.score >= 70 ? 'Leadership and chemistry around him support staying put.' : 'Shaky clubhouse chemistry could make outside options more appealing.',
   ];
 
   if (stayScore >= 80) {
@@ -373,6 +871,7 @@ function App() {
   const createFranchise = useFranchiseStore((state) => state.createFranchise);
   const setSelectedTab = useFranchiseStore((state) => state.setSelectedTab);
   const restartFranchise = useFranchiseStore((state) => state.restartFranchise);
+  const wipeSave = useFranchiseStore((state) => state.wipeSave);
   const releasePlayer = useFranchiseStore((state) => state.releasePlayer);
   const toggleRecruitTarget = useFranchiseStore((state) => state.toggleRecruitTarget);
   const applyRecruitingAction = useFranchiseStore((state) => state.applyRecruitingAction);
@@ -392,7 +891,21 @@ function App() {
   const [offerScholly, setOfferScholly] = useState(0);
   const [recruitingView, setRecruitingView] = useState<'overview' | 'freshmen' | 'portal' | 'profile'>('overview');
   const [showRecruitingHelp, setShowRecruitingHelp] = useState(false);
+  const [simulatingAction, setSimulatingAction] = useState<null | 'game' | 'day'>(null);
+  const simTimeoutRef = useRef<number | null>(null);
   const [rosterSort, setRosterSort] = useState<{ key: RosterSortKey; direction: 'asc' | 'desc' }>({
+    key: 'overall',
+    direction: 'desc',
+  });
+
+  type RecruitSortKey = 'name' | 'position' | 'stars' | 'interest' | 'signability' | 'status';
+  const [recruitSort, setRecruitSort] = useState<{ key: RecruitSortKey; direction: 'asc' | 'desc' }>({
+    key: 'stars',
+    direction: 'desc',
+  });
+  
+  type PortalSortKey = 'name' | 'position' | 'overall' | 'ask' | 'interest' | 'risk';
+  const [portalSort, setPortalSort] = useState<{ key: PortalSortKey; direction: 'asc' | 'desc' }>({
     key: 'overall',
     direction: 'desc',
   });
@@ -400,6 +913,14 @@ function App() {
   const openPlayerProfile = (playerId: string) => {
     setSelectedPlayerId(playerId);
     setSelectedTab('player');
+  };
+  const openRecruitingFreshmen = () => {
+    setRecruitingView('freshmen');
+    setSelectedTab('recruiting');
+  };
+  const openRecruitingPortal = () => {
+    setRecruitingView('portal');
+    setSelectedTab('recruiting');
   };
 
   const seasonOutlook = useMemo(() => selectSeasonOutlook(save), [save]);
@@ -421,6 +942,40 @@ function App() {
         : save.roster[0].id
     ));
   }, [save?.roster]);
+
+  useEffect(() => () => {
+    if (simTimeoutRef.current !== null) {
+      window.clearTimeout(simTimeoutRef.current);
+    }
+  }, []);
+
+  const runSimAction = (action: 'game' | 'day', execute: () => void) => {
+    if (simulatingAction) return;
+    setSimulatingAction(action);
+    simTimeoutRef.current = window.setTimeout(() => {
+      try {
+        execute();
+      } finally {
+        setSimulatingAction(null);
+        simTimeoutRef.current = null;
+      }
+    }, 0);
+  };
+
+  const teamChemistry = useMemo(
+    () => buildTeamChemistryProfile(save?.roster ?? []),
+    [save?.roster],
+  );
+  const coachingStaff = useMemo(
+    () => (save ? getProgramStaffFromSave(save, save.userProgramId) : null),
+    [save],
+  );
+  const programDevelopmentIdentity = useMemo(
+    () => (coachingStaff ? getProgramDevelopmentIdentity(coachingStaff) : null),
+    [coachingStaff],
+  );
+  const [overviewPollTab, setOverviewPollTab] = useState<string>('AP Top 25');
+  const seasonSnapshot = useMemo(() => save?.seasonSnapshot ?? (save ? buildSeasonSnapshot(save) : null), [save]);
 
   if (!save || !program) {
     return (
@@ -463,8 +1018,6 @@ function App() {
               <div className="table-head">Program</div>
               <div className="table-head">Conference</div>
               <div className="table-head">Prestige</div>
-              <div className="table-head">10Y Avg RPI</div>
-              <div className="table-head">Titles</div>
               <div className="table-head">NIL Pull</div>
               <div className="table-head">Action</div>
 
@@ -476,8 +1029,8 @@ function App() {
                   </div>
                   <div className="table-cell">{entry.conference}</div>
                   <div className="table-cell">{entry.prestige.overall}</div>
-                  <div className="table-cell">{entry.prestige.history.avgRpiRank}</div>
-                  <div className="table-cell">{entry.prestige.history.nationalTitles}</div>
+                  
+                  
                   <div className="table-cell">{entry.prestige.nilAttractiveness}</div>
                   <div className="table-cell">
                     <button className="ui-button ui-button--primary" onClick={() => createFranchise(entry.id)}>
@@ -545,11 +1098,6 @@ function App() {
     return rosterSort.direction === 'asc' ? '▲' : '▼';
   };
 
-  type RecruitSortKey = 'name' | 'position' | 'stars' | 'interest' | 'signability' | 'status';
-  const [recruitSort, setRecruitSort] = useState<{ key: RecruitSortKey; direction: 'asc' | 'desc' }>({
-    key: 'stars',
-    direction: 'desc',
-  });
   const toggleRecruitSort = (key: RecruitSortKey) => {
     setRecruitSort((current) => current.key === key
       ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
@@ -560,11 +1108,6 @@ function App() {
     return recruitSort.direction === 'asc' ? '▲' : '▼';
   };
 
-  type PortalSortKey = 'name' | 'position' | 'overall' | 'ask' | 'interest' | 'risk';
-  const [portalSort, setPortalSort] = useState<{ key: PortalSortKey; direction: 'asc' | 'desc' }>({
-    key: 'overall',
-    direction: 'desc',
-  });
   const togglePortalSort = (key: PortalSortKey) => {
     setPortalSort((current) => current.key === key
       ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
@@ -577,14 +1120,17 @@ function App() {
 
   const openPortalEntries = save.portalEntries.filter((entry) => !entry.destinationProgramId).slice(0, 5);
   const flaggedReviews = save.complianceReviews.slice(0, 4);
-  const seasonSnapshot = save.seasonSnapshot;
   const leagueGames = save.season?.games ?? [];
   const completedLeagueGames = leagueGames.filter((game) => game.status === 'final' && game.result);
   const gameRecordById = new Map(leagueGames.map((game) => [game.id, game]));
-  const activeTab = tabs.find((tab) => tab.id === selectedTab) ?? tabs[0];
   const userTeamSeasonLine = seasonSnapshot?.teamStats.find((line) => line.programId === save.userProgramId);
+  const activeCoachingStaff = coachingStaff ?? getProgramStaffFromSave(save, save.userProgramId);
+  const activeProgramDevelopmentIdentity = programDevelopmentIdentity ?? getProgramDevelopmentIdentity(activeCoachingStaff);
   const selectedPlayer = save.roster.find((player) => player.id === selectedPlayerId) ?? sortedRoster[0] ?? null;
   const selectedPlayerMorale = selectedPlayer ? transferOutlookForPlayer(selectedPlayer, save.roster) : null;
+  const programStrategy = save.leagueStrategyProfiles?.[save.userProgramId];
+  const selectedPlayerCoachFit = selectedPlayer ? calculateCoachFit(selectedPlayer, activeCoachingStaff) : null;
+  const selectedPlayerArchetype = selectedPlayer ? getArchetypeDefinition(selectedPlayer.archetype) : null;
   const selectedPlayerBatting = selectedPlayer && seasonSnapshot
     ? findPlayerSeasonBatting(selectedPlayer.id, seasonSnapshot.userTeamBatting)
     : null;
@@ -595,7 +1141,6 @@ function App() {
     ? findPlayerSeasonFielding(selectedPlayer.id, seasonSnapshot.userTeamFielding)
     : null;
   const isSeasonActive = save.openingDayReady;
-  const nextAdvanceLabel = isSeasonActive ? 'Advance One Day' : 'Advance One Week';
   const calendarLabel = isSeasonActive
     ? (save.season?.lastSimulatedDayLabel
       ?? save.season?.games.find((game) => game.status === 'scheduled')?.dayLabel
@@ -603,21 +1148,20 @@ function App() {
     : (save.weeklyPlan.find((week) => week.week === save.currentWeek)?.label ?? `Week ${save.currentWeek}`);
   const currentRecord = userTeamSeasonLine ? `${userTeamSeasonLine.wins}-${userTeamSeasonLine.losses}` : '0-0';
   const hydrateProgramSchedule = (teamId: string) =>
-    createProgramSchedule(teamId).map((context, index) => {
-      const id = scheduleGameId(context);
-      const persisted = gameRecordById.get(id);
-      return persisted ?? {
-        id,
-        dayNumber: index + 1,
-        dayLabel: context.dateLabel,
-        context,
-        status: 'scheduled' as const,
-      };
-    });
+    save.season
+      ? getProgramSeasonSchedule(save.season, teamId)
+      : createProgramSchedule(teamId).map((context, index) => {
+        const id = scheduleGameId(context);
+        const persisted = gameRecordById.get(id);
+        return persisted ?? {
+          id,
+          dayNumber: index + 1,
+          dayLabel: context.dateLabel,
+          context,
+          status: 'scheduled' as const,
+        };
+      });
   const userSchedule = hydrateProgramSchedule(save.userProgramId);
-  const userUpcomingGames = userSchedule
-    .filter((game) => game.status === 'scheduled')
-    .slice(0, 8);
   const recentUserGames = userSchedule
     .filter((game) => game.status === 'final')
     .slice(-5)
@@ -632,12 +1176,15 @@ function App() {
       .sort((left, right) => calcPlayerEraLine(left) - calcPlayerEraLine(right) || right.outsRecorded - left.outsRecorded)
       .slice(0, 5)
     : [];
-  const nextUserGame = userUpcomingGames[0] ?? null;
+  const nextScheduledLeagueDayNumber = save.season ? getNextScheduledDayNumber(save.season) : null;
+  const nextUserGame = isSeasonActive && save.season && nextScheduledLeagueDayNumber
+    ? getScheduledProgramGameForDay(save.season, save.userProgramId, nextScheduledLeagueDayNumber)
+    : null;
   const nextOpponentId = nextUserGame
     ? scheduleOpponentId(save.userProgramId, nextUserGame.context.homeProgramId, nextUserGame.context.awayProgramId)
     : null;
   const nextOpponentProgram = nextOpponentId ? findProgram(nextOpponentId) : null;
-  const nextOpponentRoster = nextOpponentId ? createRosterForProgram(nextOpponentId) : [];
+  const nextOpponentRoster = nextOpponentId ? getProgramRosterFromSave(save, nextOpponentId) : [];
   const userProjection = nextUserGame
     ? buildProjectedRoster(save.roster, nextUserGame.context.gameType, nextUserGame.context.seriesGameNumber)
     : null;
@@ -649,6 +1196,8 @@ function App() {
     dayResult
     && (dayResult.homeProgramId === save.userProgramId || dayResult.awayProgramId === save.userProgramId),
   );
+  const isSimulating = simulatingAction !== null;
+  const simulatingLabel = simulatingAction === 'game' ? 'Simulating game...' : simulatingAction === 'day' ? 'Advancing day...' : '';
   const availableConferences = [...new Set(programs.map((entry) => entry.conference))].sort();
   const majorLeagueResults: LeagueResultCard[] = completedLeagueGames
     .map((game) => {
@@ -670,6 +1219,20 @@ function App() {
     })
     .sort((left, right) => right.runDiff - left.runDiff || right.dayNumber - left.dayNumber)
     .slice(0, 6);
+  const rankingBoards = buildRankingBoards(
+    seasonSnapshot?.teamStats ?? [],
+    completedLeagueGames.map((game) => ({
+      dayNumber: game.dayNumber,
+      result: game.result!,
+    })),
+    save.leagueRosters,
+    save.leagueCoachingStaffs,
+  );
+  const rankingRows = [rankingBoards.apBoard, rankingBoards.coachesBoard, rankingBoards.rpiBoard];
+  const userApRank = rankingBoards.apBoard.rows.find((row) => row.programId === save.userProgramId);
+  const userCoachesRank = rankingBoards.coachesBoard.rows.find((row) => row.programId === save.userProgramId);
+  const userRpiRank = rankingBoards.rpiBoard.rows.find((row) => row.programId === save.userProgramId);
+  const userResumeMetrics = rankingBoards.metricsByProgram.get(save.userProgramId) ?? null;
   const conferenceStandings: ConferenceStandingLine[] = (programs
     .filter((entry) => entry.conference === selectedConference)
     .map((entry) => {
@@ -733,6 +1296,12 @@ function App() {
       .slice(-5)
       .reverse()
     : [];
+  const coachingRows = [
+    activeCoachingStaff.headCoach,
+    activeCoachingStaff.assistantHitting,
+    activeCoachingStaff.assistantPitching,
+    activeCoachingStaff.assistantDevelopment,
+  ];
   const userRuns = lastPreviewGame
     ? lastPreviewGame.homeProgramId === save.userProgramId
       ? totalRunsByInning(lastPreviewGame.homeSummary.runsByInning)
@@ -743,8 +1312,166 @@ function App() {
       ? totalRunsByInning(lastPreviewGame.awaySummary.runsByInning)
       : totalRunsByInning(lastPreviewGame.homeSummary.runsByInning)
     : null;
+  const dayViewActions: DayViewAction[] = (() => {
+    const actions: DayViewAction[] = [];
+    const addAction = (action: DayViewAction) => {
+      if (!actions.some((entry) => entry.id === action.id)) {
+        actions.push(action);
+      }
+    };
 
-  const visibleTabs = tabs.filter((tab) => !tab.hidden || (tab.id === 'player' && selectedPlayer));
+    if (!isSeasonActive) {
+      if (save.phase === 'roster-audit') {
+        addAction({
+          id: 'roster',
+          label: 'Manage Roster',
+          description: 'Trim the club, inspect roles, and get the 34-man group pointed in the right direction.',
+          icon: Users,
+          tone: 'primary',
+          onClick: () => setSelectedTab('roster'),
+        });
+        addAction({
+          id: 'team-overview',
+          label: 'Team Overview',
+          description: 'Review morale, depth, and the inherited roster shape before making cuts.',
+          icon: FolderKanban,
+          onClick: () => setSelectedTab('overview'),
+        });
+      } else if (save.phase === 'recruiting') {
+        addAction({
+          id: 'recruit-board',
+          label: 'Recruiting Board',
+          description: 'Work prep targets, spend points, and keep the next class moving forward.',
+          icon: GraduationCap,
+          tone: 'primary',
+          onClick: openRecruitingFreshmen,
+        });
+        addAction({
+          id: 'roster-needs',
+          label: 'Check Team Needs',
+          description: 'Cross-check the board against position gaps and long-term roster balance.',
+          icon: Users,
+          onClick: () => setSelectedTab('roster'),
+        });
+      } else if (save.phase === 'portal') {
+        addAction({
+          id: 'portal-board',
+          label: 'Transfer Portal',
+          description: 'Attack portal upgrades and patch weak spots before the roster locks in.',
+          icon: ArrowRightLeft,
+          tone: 'primary',
+          onClick: openRecruitingPortal,
+        });
+        addAction({
+          id: 'nil-management',
+          label: 'NIL Packages',
+          description: 'Adjust NIL strategy so you can close the players worth chasing.',
+          icon: BadgeDollarSign,
+          onClick: () => setSelectedTab('nil'),
+        });
+      } else if (save.phase === 'compliance') {
+        addAction({
+          id: 'nil-review',
+          label: 'Review NIL Deals',
+          description: 'Clear risky offers and tighten up your current deal structure.',
+          icon: ShieldAlert,
+          tone: 'primary',
+          onClick: () => setSelectedTab('nil'),
+        });
+        addAction({
+          id: 'roster-check',
+          label: 'Roster Check',
+          description: 'Make sure your scholarship mix and active roster still support the plan.',
+          icon: Users,
+          onClick: () => setSelectedTab('roster'),
+        });
+      } else if (save.phase === 'certification' || save.phase === 'opening-day') {
+        addAction({
+          id: 'roster-control',
+          label: 'Roster Control',
+          description: 'Finalize the 34-man group and set the club up for opening weekend.',
+          icon: Users,
+          tone: 'primary',
+          onClick: () => setSelectedTab('roster'),
+        });
+        addAction({
+          id: 'certify-roster',
+          label: 'Certify Roster',
+          description: 'Lock the roster and move the sim into opening-day mode when you are ready.',
+          icon: ShieldAlert,
+          onClick: () => {
+            const certified = certifyCurrentRoster();
+            if (!certified) {
+              setSelectedTab('roster');
+            }
+          },
+        });
+      }
+    } else if (!nextUserGame) {
+      addAction({
+        id: 'team-overview',
+        label: 'Team Overview',
+        description: 'Use the off day to check fatigue, morale, and where the club needs attention.',
+        icon: FolderKanban,
+        tone: 'primary',
+        onClick: () => setSelectedTab('overview'),
+      });
+      addAction({
+        id: 'roster-tuneup',
+        label: 'Roster Control',
+        description: 'Adjust your lineup thinking and keep tabs on who is trending up or down.',
+        icon: Users,
+        onClick: () => setSelectedTab('roster'),
+      });
+      addAction({
+        id: 'league-scan',
+        label: 'League Overview',
+        description: 'Catch up on standings and results before you advance the calendar.',
+        icon: BarChart3,
+        onClick: () => setSelectedTab('stats'),
+      });
+    }
+
+    return actions.slice(0, 3);
+  })();
+  const primaryDayAction = nextUserGame
+    ? {
+      label: simulatingAction === 'game' ? 'Simulating...' : 'Sim Game',
+      icon: Swords,
+      disabled: isSimulating,
+      className: 'ui-button ui-button--primary',
+      onClick: () => runSimAction('game', simulateNextUserGame),
+    }
+    : dayViewActions[0]
+      ? {
+        label: dayViewActions[0].label,
+        icon: dayViewActions[0].icon,
+        disabled: false,
+        className: dayViewActions[0].tone === 'primary' ? 'ui-button ui-button--primary' : 'ui-button',
+        onClick: dayViewActions[0].onClick,
+      }
+      : null;
+  const dayViewStatusLabel = !isSeasonActive
+    ? `${calendarLabel} • no game scheduled`
+    : nextScheduledLeagueDayNumber === null
+      ? 'Season calendar is complete'
+      : nextUserGame
+        ? `${nextUserGame.dayLabel} • ${nextUserGame.context.gameType} • G${nextUserGame.context.seriesGameNumber}`
+        : `${save.season?.games.find((game) => game.dayNumber === nextScheduledLeagueDayNumber)?.dayLabel ?? 'Next league day'} • off day`;
+  const dayViewSummary = !isSeasonActive
+    ? 'This week is still in offseason management, so there is no game to preview or simulate.'
+    : nextScheduledLeagueDayNumber === null
+      ? 'There are no scheduled user games left.'
+      : nextUserGame
+        ? `${gameSiteLabel(save.userProgramId, nextUserGame.context.homeProgramId, nextUserGame.context.awayProgramId)} against ${nextOpponentProgram?.school ?? 'Opponent'}.`
+        : 'Your club does not have a game on the next scheduled league day. Use Advance Day to continue.';
+  const dayViewFocus = !isSeasonActive
+    ? `Current phase: ${calendarLabel}. Jump straight into the work that advances this week.`
+    : nextUserGame
+      ? 'Current phase: game day. You can preview the matchup or simulate it directly from here.'
+      : 'Current phase: off day. Use the shortcuts below to handle team management before you advance.';
+
+  const visibleTabs = tabs.filter((tab) => !tab.hidden);
   const groupedTabs = visibleTabs.reduce<Record<string, Array<(typeof tabs)[number]>>>((groups, tab) => {
     groups[tab.group] = [...(groups[tab.group] ?? []), tab];
     return groups;
@@ -802,82 +1529,56 @@ function App() {
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
-          <div className="topbar__breadcrumbs">
-            <button className="crumb-button" onClick={() => setSelectedTab('stats')}>League Home</button>
-            <span>/</span>
-            <button className="crumb-button" onClick={() => setSelectedTab('overview')}>{program.school}</button>
-            <span>/</span>
-            {selectedTab === 'player' && selectedPlayer ? (
-              <strong>{selectedPlayer.name}</strong>
-            ) : (
-              <strong>{activeTab.label}</strong>
-            )}
+        <header className="manager-header" style={{ '--team-primary': program.colors.primary } as any}>
+          <div className="manager-header-left">
+            <h2>{program.school} {program.nickname}</h2>
+            <div className="manager-header-sub">Record: {currentRecord} | Projected: {seasonOutlook?.averageWins ?? '--'}</div>
           </div>
-
-          <div className="topbar__actions">
-            <button className="ui-button" onClick={() => setSelectedTab('settings')}>
-              <Settings2 size={15} />
-              Settings
-            </button>
-            <button className="ui-button" onClick={() => certifyCurrentRoster()}>
-              <Flag size={15} />
-              Certify Roster
-            </button>
-            <button className="ui-button ui-button--primary" onClick={() => advanceWeek()}>
-              <CalendarDays size={15} />
-              {nextAdvanceLabel}
+          <div className="manager-header-center">
+            <div>{calendarLabel}</div>
+          </div>
+          <div className="manager-header-right">
+            <div className="manager-header-actions">
+              <button onClick={() => setSelectedTab('settings')}>Settings</button>
+              <button onClick={() => certifyCurrentRoster()}>Certify Roster</button>
+            </div>
+            <button
+              className="btn-continue"
+              disabled={isSimulating}
+              onClick={() => runSimAction('day', advanceWeek)}
+            >
+              {simulatingAction === 'day' ? 'ADVANCING...' : 'ADVANCE DAY'}
             </button>
           </div>
         </header>
 
-        <section className="scorestrip">
-          <article>
-            <span>Record</span>
-            <strong>{currentRecord}</strong>
-          </article>
-          <article>
-            <span>Calendar</span>
-            <strong>{calendarLabel}</strong>
-          </article>
-          <article>
-            <span>Scholarships Committed</span>
-            <strong>{scholarshipEquivalencies.toFixed(1)} / {program.resources.scholarshipBudget.toFixed(1)}</strong>
-          </article>
-          <article>
-            <span>Scholarships Left</span>
-            <strong>{scholarshipAvailable.toFixed(1)} equiv.</strong>
-          </article>
-          <article>
-            <span>School NIL Committed</span>
-            <strong>{money(schoolNilCommitted)}</strong>
-          </article>
-          <article>
-            <span>Pitchers / Hitters</span>
-            <strong>{pitcherCount} / {hitterCount}</strong>
-          </article>
-          <article>
-            <span>10Y Avg RPI</span>
-            <strong>{program.prestige.history.avgRpiRank}</strong>
-          </article>
-          <article>
-            <span>National Titles</span>
-            <strong>{program.prestige.history.nationalTitles}</strong>
-          </article>
-          <article>
-            <span>CWS Trips</span>
-            <strong>{program.prestige.history.cwsTrips}</strong>
-          </article>
-          <article>
-            <span>Projected Wins</span>
-            <strong>{seasonOutlook?.averageWins ?? '—'}</strong>
-          </article>
-        </section>
+        
 
         <section className="workspace-grid">
           <div className="workspace-main">
             {selectedTab === 'overview' && (
               <>
+                <div className="dashboard-widgets-grid">
+                  <div className="dashboard-widget">
+                    <h3>Team Finances</h3>
+                    <div className="widget-row"><span>School NIL Committed</span> <strong>{money(schoolNilCommitted)}</strong></div>
+                    <div className="widget-row"><span>Scholarships Left</span> <strong>{scholarshipAvailable.toFixed(1)} equiv.</strong></div>
+                    <div className="widget-row"><span>Scholarships Committed</span> <strong>{scholarshipEquivalencies.toFixed(1)} / {program.resources.scholarshipBudget.toFixed(1)}</strong></div>
+                  </div>
+                  <div className="dashboard-widget">
+                    <h3>Program Status</h3>
+                    <div className="widget-row"><span>Prestige Tier</span> <strong>{program.prestigeLevel}</strong></div>
+                    <div className="widget-row"><span>Conference Tier</span> <strong>{program.conferenceTier}</strong></div>
+                    <div className="widget-row"><span>NIL Rating</span> <strong>{program.prestige.nilAttractiveness}</strong></div>
+                  </div>
+                  <div className="dashboard-widget">
+                    <h3>Roster Overview</h3>
+                    <div className="widget-row"><span>Pitchers</span> <strong>{pitcherCount}</strong></div>
+                    <div className="widget-row"><span>Hitters</span> <strong>{hitterCount}</strong></div>
+                    <div className="widget-row"><span>Total</span> <strong>{save.roster.length}</strong></div>
+                  </div>
+                </div>
+
                 <section className="screen">
                   <div className="screen__header">
                     <div>
@@ -919,7 +1620,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="two-column">
+                  <div className="two-column two-column--overview-results">
                     <div className="table-shell">
                       <div className="table-toolbar">
                         <span>Past 5 games</span>
@@ -962,7 +1663,7 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="two-column">
+                    <div className="two-column two-column--stacked">
                       <div className="table-shell">
                         <div className="table-toolbar">
                           <span>Top hitters</span>
@@ -1021,6 +1722,65 @@ function App() {
                     </div>
                   </div>
                 </section>
+
+                <section className="screen">
+                  <div className="screen__header">
+                    <div>
+                      <p className="ui-kicker">Development Environment</p>
+                      <h2>Coaching staff and clubhouse</h2>
+                    </div>
+                  </div>
+
+                  <div className="two-column">
+                    <div className="table-shell">
+                      <div className="table-toolbar">
+                        <span>Coaching staff</span>
+                        <span>Head coach + 3 assistants</span>
+                      </div>
+                      <div className="table-grid table-grid--coaches">
+                        <div className="table-head">Coach</div>
+                        <div className="table-head">Role</div>
+                        <div className="table-head">OVR</div>
+                        <div className="table-head">Lead</div>
+                        <div className="table-head">Mor</div>
+                        <div className="table-head">Inj</div>
+
+                        {coachingRows.map((coach) => (
+                          <div className="table-row" key={coach.id}>
+                            <div className="table-cell table-cell--program">
+                              <strong>{coach.name}</strong>
+                            </div>
+                            <div className="table-cell">{coachRoleShortLabel(coach.role)}</div>
+                            <div className="table-cell">{coach.overall}</div>
+                            <div className="table-cell">{coach.leadership}</div>
+                            <div className="table-cell">{coach.moraleSupport}</div>
+                            <div className="table-cell">{coach.injuryPrevention}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mini-table">
+                      <div className="mini-table__header">
+                        <ShieldAlert size={16} />
+                        <strong>Team chemistry snapshot</strong>
+                      </div>
+                      <div className="mini-table__body">
+                        <div className="mini-table__row"><span>Clubhouse</span><strong>{teamChemistry.summary}</strong></div>
+                        <div className="mini-table__row"><span>Chemistry score</span><strong>{teamChemistry.score}</strong></div>
+                        <div className="mini-table__row"><span>Leadership avg</span><strong>{teamChemistry.leadership}</strong></div>
+                        <div className="mini-table__row"><span>Selfishness avg</span><strong>{teamChemistry.selfishness}</strong></div>
+                        <div className="mini-table__row"><span>Resilience avg</span><strong>{teamChemistry.resilience}</strong></div>
+                        {programStrategy && (
+                          <>
+                            <div className="mini-table__row"><span>Offensive identity</span><strong>{programStrategy.offenseFocus}</strong></div>
+                            <div className="mini-table__row"><span>Pitching identity</span><strong>{programStrategy.pitchingFocus}</strong></div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </>
             )}
 
@@ -1057,7 +1817,7 @@ function App() {
                             <button className="link-button" onClick={() => openPlayerProfile(player.id)}>
                               <strong>{player.name}</strong>
                             </button>
-                            <span>{player.archetype}</span>
+                            <span>{player.bats}/{player.throws} • {player.hometown}</span>
                           </div>
                           <div className="table-cell">{player.primaryPosition}</div>
                           <div className="table-cell">{player.classYear}</div>
@@ -1067,10 +1827,10 @@ function App() {
                           <div className="table-cell">{player.rosterStatus.scholarshipPct}%</div>
                           <div className="table-cell">{money(player.rosterStatus.schoolNilValue)}</div>
                           <div className="table-cell table-cell--actions">
-                            <button className="ui-button ui-button--ghost" onClick={() => openPlayerProfile(player.id)}>
+                            <button className="ui-button ui-button--ghost ui-button--compact" onClick={() => openPlayerProfile(player.id)}>
                               View
                             </button>
-                            <button className="ui-button ui-button--ghost" onClick={() => releasePlayer(player.id)}>
+                            <button className="ui-button ui-button--ghost ui-button--compact" onClick={() => releasePlayer(player.id)}>
                               Release
                             </button>
                           </div>
@@ -1130,7 +1890,7 @@ function App() {
                     <h2>{selectedPlayer.name}</h2>
                   </div>
                   <div className="screen__meta">
-                    {selectedPlayer.classYear} • {selectedPlayer.primaryPosition} • {selectedPlayer.archetype} • Ratings {formatRatingLabel(ratingDisplay)}
+                    {selectedPlayer.classYear} • {selectedPlayer.primaryPosition} • Ratings {formatRatingLabel(ratingDisplay)}
                   </div>
                 </div>
 
@@ -1248,12 +2008,44 @@ function App() {
                       {!selectedPlayerBatting && !selectedPlayerPitching && !selectedPlayerFielding && (
                         <div className="table-row">
                           <div className="table-cell">Season</div>
-                          <div className="table-cell">No live season stats yet. Advance into the schedule to build this page out.</div>
+                          <div className="table-cell table-cell--wrap">No live season stats yet. Advance into the schedule to build this page out.</div>
                         </div>
                       )}
                     </div>
                   </div>
 
+                  <div className="table-shell">
+                    <div className="table-toolbar">
+                      <span>Development history</span>
+                      <span>Recent year-over-year growth notes</span>
+                    </div>
+                    <div className="table-grid table-grid--player-summary">
+                      <div className="table-head">Year</div>
+                      <div className="table-head">OVR</div>
+                      <div className="table-head">POT</div>
+                      <div className="table-head">Context</div>
+
+                      {selectedPlayer.developmentHistory.slice().reverse().map((entry) => (
+                        <div className="table-row" key={`${entry.year}-${entry.classYear}`}>
+                          <div className="table-cell">Y{entry.year} ({entry.classYear})</div>
+                          <div className="table-cell">{entry.overallBefore} → {entry.overallAfter}</div>
+                          <div className="table-cell">{entry.potentialBefore} → {entry.potentialAfter}</div>
+                          <div className="table-cell table-cell--wrap">{entry.summary}</div>
+                        </div>
+                      ))}
+                      {!selectedPlayer.developmentHistory.length && (
+                        <div className="table-row">
+                          <div className="table-cell">No history</div>
+                          <div className="table-cell">—</div>
+                          <div className="table-cell">—</div>
+                          <div className="table-cell table-cell--wrap">Year-over-year development notes will appear after your first offseason rollover.</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="two-column">
                   <div className="table-shell">
                     <div className="table-toolbar">
                       <span>Recent game log</span>
@@ -1270,7 +2062,7 @@ function App() {
                           <div className="table-cell">{entry.dayLabel}</div>
                           <div className="table-cell">{entry.opponent}</div>
                           <div className="table-cell">{entry.result}</div>
-                          <div className="table-cell">
+                          <div className="table-cell table-cell--wrap">
                             {entry.battingLine && `${entry.battingLine.hits}-${entry.battingLine.atBats}, ${entry.battingLine.runsBattedIn} RBI`}
                             {entry.pitchingLine && `${inningsText(entry.pitchingLine.outsRecorded)} IP, ${entry.pitchingLine.runsAllowed} R, ${entry.pitchingLine.strikeouts} SO`}
                             {!entry.battingLine && !entry.pitchingLine && entry.fieldingLine && `${entry.fieldingLine.chances} chances, ${entry.fieldingLine.errors} E`}
@@ -1282,7 +2074,7 @@ function App() {
                           <div className="table-cell">No games</div>
                           <div className="table-cell">—</div>
                           <div className="table-cell">—</div>
-                          <div className="table-cell">Game-by-game lines will appear here once this player logs live season results.</div>
+                          <div className="table-cell table-cell--wrap">Game-by-game lines will appear here once this player logs live season results.</div>
                         </div>
                       )}
                     </div>
@@ -1381,51 +2173,62 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="table-shell">
-                    <div className="table-toolbar">
-                      <span>Target board</span>
-                      <span>{targetedRecruits.length} active targets</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div className="mini-table">
+                      <div className="mini-table__header"><strong>Program Recruiting Identity</strong></div>
+                      <div className="mini-table__body">
+                        <div className="mini-table__row"><span>Primary lane</span><strong>{activeProgramDevelopmentIdentity.primaryLabel}</strong></div>
+                        <div className="mini-table__row"><span>Secondary lane</span><strong>{activeProgramDevelopmentIdentity.secondaryLabel}</strong></div>
+                        <div className="mini-table__row"><span>Staff summary</span><strong>{activeProgramDevelopmentIdentity.summary}</strong></div>
+                      </div>
                     </div>
-                    <div className="table-grid table-grid--targets">
-                      <div className="table-head">Recruit</div>
-                      <div className="table-head">Interest</div>
-                      <div className="table-head">Weekly</div>
-                      <div className="table-head">Actions</div>
 
-                      {targetedRecruits.length === 0 && (
-                        <div className="table-row">
-                          <div className="table-cell table-cell--program">
-                            <strong>No active targets</strong>
-                            <span>Target a few recruits below, then spend this week's points on them.</span>
-                          </div>
-                          <div className="table-cell">—</div>
-                          <div className="table-cell">—</div>
-                          <div className="table-cell">—</div>
-                        </div>
-                      )}
+                    <div className="table-shell">
+                      <div className="table-toolbar">
+                        <span>Target board</span>
+                        <span>{targetedRecruits.length} active targets</span>
+                      </div>
+                      <div className="table-grid table-grid--targets">
+                        <div className="table-head">Recruit</div>
+                        <div className="table-head">Interest</div>
+                        <div className="table-head">Weekly</div>
+                        <div className="table-head">Actions</div>
 
-                      {targetedRecruits.map((recruit) => (
-                        <div className="table-row" key={recruit.id}>
-                          <div className="table-cell table-cell--program">
-                            <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
-                            <span>{recruit.primaryPosition} • {recruit.stars}★ • scout {recruit.scoutingLevel ?? 0}/3</span>
+                        {targetedRecruits.length === 0 && (
+                          <div className="table-row">
+                            <div className="table-cell table-cell--program">
+                              <strong>No active targets</strong>
+                              <span>Target a few recruits below, then spend this week's points on them.</span>
+                            </div>
+                            <div className="table-cell">—</div>
+                            <div className="table-cell">—</div>
+                            <div className="table-cell">—</div>
                           </div>
-                          <div className="table-cell">{recruit.interest} • {interestLabel(recruit.interest)}</div>
-                          <div className="table-cell">{recruit.weeklyPointsSpent ?? 0} pts</div>
-                          <div className="table-cell table-cell--actions">
-                            {recruitingActionButtons.map((action) => (
-                              <button
-                                key={action.id}
-                                className="ui-button ui-button--ghost ui-button--compact"
-                                disabled={(recruit.weeklyActions ?? []).includes(action.id) || save.recruitingPointsRemaining < action.cost}
-                                onClick={() => applyRecruitingAction(recruit.id, action.id)}
-                              >
-                                {action.label} {action.cost}
-                              </button>
-                            ))}
+                        )}
+
+                        {targetedRecruits.map((recruit) => (
+                          <div className="table-row" key={recruit.id}>
+                            <div className="table-cell table-cell--program">
+                              <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
+                              <span>{recruit.primaryPosition} • {recruit.stars}★ • scout {recruit.scoutingLevel ?? 0}/3</span>
+                            </div>
+                            <div className="table-cell">{recruit.interest} • {interestLabel(recruit.interest)}</div>
+                            <div className="table-cell">{recruit.weeklyPointsSpent ?? 0} pts</div>
+                            <div className="table-cell table-cell--actions">
+                              {recruitingActionButtons.map((action) => (
+                                <button
+                                  key={action.id}
+                                  className="ui-button ui-button--ghost ui-button--compact"
+                                  disabled={(recruit.weeklyActions ?? []).includes(action.id) || save.recruitingPointsRemaining < action.cost}
+                                  onClick={() => applyRecruitingAction(recruit.id, action.id)}
+                                >
+                                  {action.label} {action.cost}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1442,7 +2245,7 @@ function App() {
                     <button className="table-head table-head--button" onClick={() => toggleRecruitSort('name')}>Player {recruitSortLabel('name')}</button>
                     <button className="table-head table-head--button" onClick={() => toggleRecruitSort('position')}>Pos {recruitSortLabel('position')}</button>
                     <button className="table-head table-head--button" onClick={() => toggleRecruitSort('stars')}>Stars {recruitSortLabel('stars')}</button>
-                    <div className="table-head">Region</div>
+                    <div className="table-head">Hometown</div>
                     <button className="table-head table-head--button" onClick={() => toggleRecruitSort('interest')}>Interest {recruitSortLabel('interest')}</button>
                     <button className="table-head table-head--button" onClick={() => toggleRecruitSort('signability')}>Likely to Sign {recruitSortLabel('signability')}</button>
                     <div className="table-head">Need Fit</div>
@@ -1464,17 +2267,19 @@ function App() {
                         default: return 0;
                       }
                     }).map((recruit) => (
+                      (() => {
+                        const recruitFit = calculateRecruitProgramFit(save.userProgramId, recruit, save.roster, getProgramStaffFromSave(save, save.userProgramId));
+                        return (
                       <div className="table-row" key={recruit.id}>
                         <div className="table-cell table-cell--program">
                           <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
-                          <span>{recruit.marketability} marketability</span>
                         </div>
                         <div className="table-cell">{recruit.primaryPosition}</div>
                         <div className="table-cell">{recruit.stars}</div>
-                        <div className="table-cell">{recruit.region}</div>
+                        <div className="table-cell">{recruit.hometown?.city}, {recruit.hometown?.state}</div>
                         <div className="table-cell">{recruit.interest} • {interestLabel(recruit.interest)}</div>
                         <div className="table-cell">{recruit.signability} • {signabilityLabel(recruit.signability)}</div>
-                        <div className="table-cell">{recruitingNeeds.some((need) => need.position === recruit.primaryPosition && need.urgency >= 4) ? 'Priority' : 'Depth'}</div>
+                        <div className="table-cell">{recruitFit.needFit.label} • {recruitFit.coachFit.summary}</div>
                         <div className="table-cell">
                           {recruit.committedProgramId ? `Committed: ${findProgram(recruit.committedProgramId)?.school ?? 'Elsewhere'}` : recruit.targeted ? 'Targeted' : 'Open'}
                         </div>
@@ -1491,6 +2296,8 @@ function App() {
                           )}
                         </div>
                       </div>
+                        );
+                      })()
                     ))}
                   </div>
                 </div>
@@ -1500,17 +2307,21 @@ function App() {
             {recruitingView === 'profile' && (() => {
               const recruit = save.recruits.find((r) => r.id === selectedRecruitId);
               if (!recruit) return null;
+              const grades = calculateSchoolGrades(save.userProgramId, recruit, save.roster);
+              const recruitProgramFit = calculateRecruitProgramFit(save.userProgramId, recruit, save.roster, getProgramStaffFromSave(save, save.userProgramId));
+              const recruitArchetype = getArchetypeDefinition(recruit.archetype);
               return (
                 <div className="table-shell" style={{ padding: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>
                       <button className="crumb-button" onClick={() => setRecruitingView('freshmen')}>← Back to Freshmen</button>
                       <h2 style={{ marginTop: '8px' }}>{recruit.name}</h2>
-                      <div className="screen__meta">{recruit.primaryPosition} • {recruit.stars}★ • {recruit.region} • {recruit.marketability} Marketability</div>
+                      <div className="screen__meta">{recruit.primaryPosition} • {recruit.stars}★ • {recruit.hometown?.city}, {recruit.hometown?.state} • {recruit.marketability} MKT • <span style={{ color: '#ffb86c' }}>Dealbreaker: {recruit.dealbreaker?.toUpperCase() ?? 'NONE'}</span></div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Interest: {recruit.interest}</div>
-                      <div className="screen__meta">{recruit.committedProgramId ? 'Committed' : recruit.targeted ? 'Targeted' : 'Open'}</div>
+                      <div className="screen__meta" style={{ fontSize: '1.1rem', fontWeight: 'bold', color: recruit.committedProgramId ? '#50fa7b' : 'inherit' }}>
+                        {recruit.committedProgramId ? 'COMMITTED' : recruit.targeted ? 'Targeted' : 'Open'}
+                      </div>
                     </div>
                   </div>
 
@@ -1528,18 +2339,57 @@ function App() {
                           {recruit.defense && (
                             <div className="mini-table__row"><span>Defense</span><strong>DEF {recruit.defense.defense} • ARM {recruit.defense.arm}</strong></div>
                           )}
+                          <div className="mini-table__row"><span>Archetype</span><strong>{recruitArchetype.label}</strong></div>
                           <div className="mini-table__row"><span>Likely to Sign</span><strong>{recruit.signability}</strong></div>
                         </div>
                       </div>
 
                       <div className="mini-table" style={{ marginTop: '16px' }}>
-                        <div className="mini-table__header"><strong>Preferences</strong></div>
+                        <div className="mini-table__header"><strong>Preferences & School Grades</strong></div>
                         <div className="mini-table__body">
-                          <div className="mini-table__row"><span>Proximity</span><strong>{recruit.preferences.proximity}</strong></div>
-                          <div className="mini-table__row"><span>Playing Time</span><strong>{recruit.preferences.playingTime}</strong></div>
-                          <div className="mini-table__row"><span>Prestige</span><strong>{recruit.preferences.prestige}</strong></div>
-                          <div className="mini-table__row"><span>NIL</span><strong>{recruit.preferences.nil}</strong></div>
-                          <div className="mini-table__row"><span>Development</span><strong>{recruit.preferences.development}</strong></div>
+                          <div className="mini-table__row"><span>Proximity (Pref: {recruit.preferences.proximity})</span><strong>{grades.proximity}</strong></div>
+                          <div className="mini-table__row"><span>Playing Time (Pref: {recruit.preferences.playingTime})</span><strong>{grades.playingTime}</strong></div>
+                          <div className="mini-table__row"><span>Prestige (Pref: {recruit.preferences.prestige})</span><strong>{grades.prestige}</strong></div>
+                          <div className="mini-table__row"><span>NIL (Pref: {recruit.preferences.nil})</span><strong>{grades.nil}</strong></div>
+                          <div className="mini-table__row"><span>Development (Pref: {recruit.preferences.development})</span><strong>{grades.development}</strong></div>
+                        </div>
+                      </div>
+
+                      <div className="mini-table" style={{ marginTop: '16px' }}>
+                        <div className="mini-table__header"><strong>Program Fit</strong></div>
+                        <div className="mini-table__body">
+                          <div className="mini-table__row"><span>Overall fit</span><strong>{recruitProgramFit.score} • {recruitProgramFit.label}</strong></div>
+                          <div className="mini-table__row"><span>Roster need</span><strong>{recruitProgramFit.needFit.score} • {recruitProgramFit.needFit.label}</strong></div>
+                          <div className="mini-table__row"><span>Coach fit</span><strong>{recruitProgramFit.coachFit.score} • {recruitProgramFit.coachFit.summary}</strong></div>
+                          <div className="mini-table__row"><span>Identity bonus</span><strong>+{recruitProgramFit.identityBonus} • {recruitProgramFit.identity.summary}</strong></div>
+                        </div>
+                      </div>
+
+                      <div className="mini-table" style={{ marginTop: '16px' }}>
+                        <div className="mini-table__header"><strong>Top Interested Schools</strong></div>
+                        <div className="mini-table__body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {(recruit.topSchools ?? []).map((school, index) => {
+                            const p = programs.find((x) => x.id === school.programId);
+                            if (!p) return null;
+                            const isUser = p.id === save.userProgramId;
+                            // Estimate progress out of 160 for a full bar
+                            const progressPct = Math.min(100, Math.max(0, (school.score / 160) * 100));
+                            return (
+                              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '24px', fontWeight: 'bold', color: '#6272a4' }}>#{index + 1}</div>
+                                <div style={{ width: '120px', fontWeight: isUser ? 'bold' : 'normal', color: isUser ? '#f8f8f2' : '#8be9fd' }}>
+                                  {p.school}
+                                </div>
+                                <div style={{ flex: 1, height: '12px', backgroundColor: '#282a36', borderRadius: '6px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${progressPct}%`, height: '100%', backgroundColor: p.colors.primary, transition: 'width 0.3s ease' }} />
+                                </div>
+                                <div style={{ width: '40px', textAlign: 'right', fontSize: '0.85rem' }}>{Math.round(school.score)}</div>
+                              </div>
+                            );
+                          })}
+                          {(!recruit.topSchools || recruit.topSchools.length === 0) && (
+                            <div className="screen__meta">No scouting data available yet. Advance a week to see competition.</div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1607,10 +2457,10 @@ function App() {
                   </div>
                 ) : (
                   <>
-                    <div className="two-column">
-                      <div className="mini-table">
-                        <div className="mini-table__header">
-                          <ArrowRightLeft size={16} />
+                <div className="two-column">
+                  <div className="mini-table">
+                    <div className="mini-table__header">
+                      <ArrowRightLeft size={16} />
                           <strong>Portal Window Open (June 1 - July 1)</strong>
                         </div>
                     <div className="mini-table__body">
@@ -1647,6 +2497,12 @@ function App() {
                         <span>Be careful with</span>
                         <strong>Big asks plus very high risk scores</strong>
                       </div>
+                      {programStrategy && (
+                        <div className="mini-table__row">
+                          <span>Your identity</span>
+                          <strong>{programStrategy.offenseFocus} offense • {programStrategy.pitchingFocus} pitching</strong>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1681,14 +2537,14 @@ function App() {
                       <div className="table-row" key={entry.id}>
                         <div className="table-cell table-cell--program">
                           <strong>{entry.player.name}</strong>
-                          <span>{entry.player.archetype}</span>
+                          <span>{entry.reason ?? `${entry.player.bats}/${entry.player.throws} • ${entry.player.hometown}`}{entry.topDestinations?.[0] ? ` • Lean: ${findProgram(entry.topDestinations[0].programId)?.school ?? 'Unknown'}` : ''}</span>
                         </div>
                         <div className="table-cell">{findProgram(entry.originProgramId)?.school}</div>
                         <div className="table-cell">{entry.player.primaryPosition}</div>
                         <div className="table-cell">{entry.player.overall}</div>
                         <div className="table-cell">{entry.askingScholarshipPct}% equiv. + {money(entry.askingSchoolNil)}</div>
                         <div className="table-cell">{entry.interest} • {interestLabel(entry.interest)}</div>
-                        <div className="table-cell">{entry.tamperRisk} • {transferRiskLabel(entry.tamperRisk)}</div>
+                        <div className="table-cell">{entry.tamperRisk} • {transferRiskLabel(entry.tamperRisk)}{entry.coachChange ? ' • Staff shake-up' : ''}</div>
                         <div className="table-cell">
                           {!entry.destinationProgramId ? (
                             <button
@@ -1779,6 +2635,66 @@ function App() {
                 </div>
 
                 <div className="two-column">
+                  <div className="mini-table">
+                    <div className="mini-table__header">
+                      <Users size={16} />
+                      <strong>Archetype profile</strong>
+                    </div>
+                    <div className="mini-table__body">
+                      <div className="mini-table__row"><span>Archetype</span><strong>{selectedPlayerArchetype?.label ?? selectedPlayer.archetype}</strong></div>
+                      <div className="mini-table__row"><span>Family</span><strong>{selectedPlayerArchetype?.family.replace(/-/g, ' ')}</strong></div>
+                      <div className="mini-table__row"><span>Role tags</span><strong>{selectedPlayerArchetype?.roleTags.join(', ')}</strong></div>
+                      <div className="mini-table__row"><span>Profile</span><strong>{selectedPlayerArchetype?.description}</strong></div>
+                    </div>
+                  </div>
+
+                  <div className="mini-table">
+                    <div className="mini-table__header">
+                      <Sparkles size={16} />
+                      <strong>Development outlook</strong>
+                    </div>
+                    <div className="mini-table__body">
+                      <div className="mini-table__row"><span>Current note</span><strong>{selectedPlayer.seasonDevelopmentContext.note}</strong></div>
+                      <div className="mini-table__row"><span>Coach fit</span><strong>{selectedPlayerCoachFit?.score} • {selectedPlayerCoachFit?.summary}</strong></div>
+                      <div className="mini-table__row"><span>In-season progress</span><strong>{selectedPlayer.seasonDevelopmentContext.inSeasonProgress}</strong></div>
+                      <div className="mini-table__row"><span>Work ethic / Coachability</span><strong>{selectedPlayer.developmentProfile.workEthic} / {selectedPlayer.developmentProfile.coachability}</strong></div>
+                      <div className="mini-table__row"><span>Ceiling reliability</span><strong>{selectedPlayer.developmentProfile.ceilingReliability}</strong></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="two-column">
+                  <div className="mini-table">
+                    <div className="mini-table__header">
+                      <ShieldAlert size={16} />
+                      <strong>Leadership and personality</strong>
+                    </div>
+                    <div className="mini-table__body">
+                      <div className="mini-table__row"><span>Leadership</span><strong>{leadershipLabel(selectedPlayer.leadership.current)} ({selectedPlayer.leadership.current})</strong></div>
+                      <div className="mini-table__row"><span>Leadership potential</span><strong>{selectedPlayer.leadership.potential}</strong></div>
+                      <div className="mini-table__row"><span>Personality</span><strong>{personalityLabel(selectedPlayer.personalityProfile.type)}</strong></div>
+                      <div className="mini-table__row"><span>Team-first / Selfishness</span><strong>{selectedPlayer.personalityProfile.teamFirst} / {selectedPlayer.personalityProfile.selfishness} ({selfishnessLabel(selectedPlayer.personalityProfile.selfishness)})</strong></div>
+                      <div className="mini-table__row"><span>Drive / Resilience</span><strong>{selectedPlayer.personalityProfile.competitiveDrive} / {selectedPlayer.personalityProfile.resilience}</strong></div>
+                    </div>
+                  </div>
+
+                  <div className="mini-table">
+                    <div className="mini-table__header">
+                      <FolderKanban size={16} />
+                      <strong>Coach fit</strong>
+                    </div>
+                    <div className="mini-table__body">
+                      {coachingRows.map((coach) => (
+                        <div className="mini-table__row" key={coach.id}>
+                          <span>{coachRoleLabel(coach.role)}</span>
+                          <strong>{coach.developmentRatings[selectedPlayerCoachFit?.family ?? 'outfielders']}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="two-column">
                   <div className="table-shell">
                     <div className="table-toolbar">
                       <span>Recent player deals</span>
@@ -1843,16 +2759,30 @@ function App() {
                     <p className="ui-kicker">Manager</p>
                     <h2>Mail</h2>
                   </div>
-                  <div className="screen__meta">Future home for injuries, eligibility notes, coach messages, and league notices</div>
+                  <div className="screen__meta">Clubhouse notes, coach messages, recruiting wins, and league notices</div>
                 </div>
 
-                <div className="mail-empty">
-                  <BookOpen size={18} />
-                  <strong>No messages yet</strong>
-                  <p>
-                    This inbox will eventually carry player injury updates, eligibility warnings,
-                    recruiting communication, and other front-office notes that need your attention.
-                  </p>
+                <div className="table-shell">
+                  <div className="table-toolbar">
+                    <span>Recent messages</span>
+                    <span>{save.eventLog.slice(0, 20).length} most recent notes</span>
+                  </div>
+                  <div className="table-grid">
+                    <div className="table-head">Type</div>
+                    <div className="table-head">Message</div>
+
+                    {save.eventLog.slice(0, 20).map((entry, index) => (
+                      <div className="table-row" key={`${entry}-${index}`}>
+                        <div className="table-cell">
+                          {entry.includes('clubhouse') || entry.includes('morale') || entry.includes('frustration') ? 'Clubhouse' : entry.includes('committed') ? 'Recruiting' : entry.includes('transferred') || entry.includes('portal') ? 'Portal' : entry.includes('Staff') || entry.includes('coach') ? 'Staff' : 'League'}
+                        </div>
+                        <div className="table-cell table-cell--program">
+                          <strong>{entry}</strong>
+                          <span>Most recent franchise activity and environment notes.</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             )}
@@ -2002,14 +2932,14 @@ function App() {
                     <div className="mini-table__row">
                       <span>Restart franchise</span>
                       <button
-                        className="ui-button ui-button--ghost"
+                        className="ui-button ui-button--danger"
                         onClick={() => {
-                          if (window.confirm(`Restart ${program.school} and erase current progress?`)) {
-                            restartFranchise();
+                          if (window.confirm(`Delete this franchise save and return to the main menu?`)) {
+                            wipeSave();
                           }
                         }}
                       >
-                        Reset save
+                        Wipe save
                       </button>
                     </div>
                     <div className="mini-table__row">
@@ -2028,18 +2958,18 @@ function App() {
                 <div className="screen__header">
                   <div>
                     <p className="ui-kicker">Day View</p>
-                    <h2>{nextUserGame ? `${program.school} vs. ${nextOpponentProgram?.school ?? 'Opponent'}` : 'No upcoming game'}</h2>
+                    <h2>{nextUserGame ? `${program.school} vs. ${nextOpponentProgram?.school ?? 'Opponent'}` : 'No game scheduled'}</h2>
                   </div>
                   <div className="screen__meta">
-                    {nextUserGame ? `${nextUserGame.dayLabel} • ${nextUserGame.context.gameType} • G${nextUserGame.context.seriesGameNumber}` : 'Season calendar is complete'}
+                    {dayViewStatusLabel}
                   </div>
                 </div>
 
                 <div className="info-panels">
                   <article className="info-panel">
                     <span>Next game</span>
-                    <strong>{nextUserGame?.dayLabel ?? 'Complete'}</strong>
-                    <p>{nextUserGame ? `${gameSiteLabel(save.userProgramId, nextUserGame.context.homeProgramId, nextUserGame.context.awayProgramId)} against ${nextOpponentProgram?.school ?? 'Opponent'}.` : 'There are no scheduled user games left.'}</p>
+                    <strong>{nextUserGame?.dayLabel ?? 'None scheduled'}</strong>
+                    <p>{dayViewSummary}</p>
                   </article>
                   <article className="info-panel">
                     <span>Probable starter</span>
@@ -2052,26 +2982,62 @@ function App() {
                     <p>{opponentProjection?.starter ? `${opponentProjection.starter.primaryPosition} • STF ${formatRatingValue(opponentProjection.starter.pitching?.stuff ?? 0, ratingDisplay)} / CMD ${formatRatingValue(opponentProjection.starter.pitching?.command ?? 0, ratingDisplay)}` : 'Opponent projection unavailable.'}</p>
                   </article>
                   <article className="info-panel">
-                    <span>Season record</span>
-                    <strong>{currentRecord}</strong>
-                    <p>Sim Game finalizes only this matchup; Advance Day moves the whole league calendar.</p>
+                    <span>{isSeasonActive ? 'Season record' : 'Today’s focus'}</span>
+                    <strong>{isSeasonActive ? currentRecord : calendarLabel}</strong>
+                    <p>{isSeasonActive ? 'Sim Game finalizes only this matchup; Advance Day moves the whole league calendar.' : dayViewFocus}</p>
                   </article>
                 </div>
 
                 <div className="toolbar-row">
+                  {primaryDayAction && (
+                    <button
+                      className={primaryDayAction.className}
+                      disabled={primaryDayAction.disabled}
+                      onClick={primaryDayAction.onClick}
+                    >
+                      <primaryDayAction.icon size={15} />
+                      {primaryDayAction.label}
+                    </button>
+                  )}
                   <button
-                    className="ui-button ui-button--primary"
-                    disabled={!nextUserGame}
-                    onClick={() => simulateNextUserGame()}
+                    className="ui-button"
+                    disabled={isSimulating}
+                    onClick={() => runSimAction('day', advanceWeek)}
                   >
-                    <Swords size={15} />
-                    Sim Game
-                  </button>
-                  <button className="ui-button" onClick={() => advanceWeek()}>
                     <CalendarDays size={15} />
-                    Advance Day
+                    {simulatingAction === 'day' ? 'Advancing...' : 'Advance Day'}
                   </button>
                 </div>
+
+                {dayViewActions.length > 0 && (
+                  <div className="day-action-grid">
+                    {dayViewActions.map((action) => (
+                      <article className="info-panel day-action-card" key={action.id}>
+                        <div className="day-action-card__header">
+                          <span>{action.label}</span>
+                          <action.icon size={16} />
+                        </div>
+                        <p>{action.description}</p>
+                        <button
+                          className={action.tone === 'primary' ? 'ui-button ui-button--primary' : action.tone === 'ghost' ? 'ui-button ui-button--ghost' : 'ui-button'}
+                          onClick={action.onClick}
+                        >
+                          Open {action.label}
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+
+                {isSimulating && (
+                  <div className="sim-status" aria-live="polite" aria-busy="true">
+                    <div className="sim-status__spinner" aria-hidden="true" />
+                    <div>
+                      <strong>{simulatingLabel}</strong>
+                      <p>Crunching the schedule, box score, and roster updates.</p>
+                    </div>
+                  </div>
+                )}
 
                 {nextUserGame && userProjection && opponentProjection && (
                   <div className="two-column">
@@ -2092,7 +3058,7 @@ function App() {
                             <div className="table-cell">{index + 1}</div>
                             <div className="table-cell table-cell--program">
                               <strong>{player.name}</strong>
-                              <span>{player.archetype}</span>
+                              <span>{player.bats}/{player.throws} • {player.hometown}</span>
                             </div>
                             <div className="table-cell">{player.primaryPosition}</div>
                             <div className="table-cell">{formatRatingValue(player.overall, ratingDisplay)}</div>
@@ -2119,7 +3085,7 @@ function App() {
                             <div className="table-cell">{index + 1}</div>
                             <div className="table-cell table-cell--program">
                               <strong>{player.name}</strong>
-                              <span>{player.archetype}</span>
+                              <span>{player.bats}/{player.throws} • {player.hometown}</span>
                             </div>
                             <div className="table-cell">{player.primaryPosition}</div>
                             <div className="table-cell">{formatRatingValue(player.overall, ratingDisplay)}</div>
@@ -2230,34 +3196,143 @@ function App() {
                   <div className="screen__header">
                     <div>
                       <p className="ui-kicker">League Overview</p>
-                      <h2>Division I landscape, rankings, and recent results</h2>
+                      <h2>Division I landscape, polls, RPI, and recent results</h2>
                     </div>
-                    <div className="screen__meta">A D1Baseball-style home page for the current season database</div>
+                    <div className="screen__meta">A D1Baseball-style home page with resume-driven rankings and bias tuned for writers, coaches, and the RPI sheet.</div>
                   </div>
 
-                  <div className="table-shell">
-                    <div className="table-toolbar">
-                      <span>Major results</span>
-                      <span>Biggest final scores from the current season database</span>
-                    </div>
-                    <div className="table-grid table-grid--league-results">
-                      <div className="table-head">Game</div>
-                      <div className="table-head">Score</div>
-                      <div className="table-head">Type</div>
+                  <div className="league-overview-hero">
+                    <div className="league-overview-hero__lead">
+                      <div className="league-overview-hero__copy">
+                        <p className="ui-kicker">National Snapshot</p>
+                        <h3>{program.school} in the national picture</h3>
+                        <p className="ui-muted">
+                          {userResumeMetrics
+                            ? `${currentRecord} overall with ${userResumeMetrics.qualityWins} quality wins, ${userResumeMetrics.roadWins} road wins, and ${userResumeMetrics.badLosses} bad losses shaping the current profile.`
+                            : 'Advance into the schedule to build a real national resume and populate the polling logic.'}
+                        </p>
+                      </div>
 
-                      {majorLeagueResults.length ? majorLeagueResults.map((result) => (
-                        <div className="table-row" key={result.id}>
-                          <div className="table-cell">{result.label}</div>
-                          <div className="table-cell">{result.score}</div>
-                          <div className="table-cell">{result.note}</div>
+                      <div className="info-panels info-panels--rankings">
+                        <div className="info-panel">
+                          <span>AP Position</span>
+                          <strong>{userApRank ? `#${userApRank.rank}` : 'Unranked'}</strong>
+                          <p>{userApRank ? `${formatTrend(userApRank.trend)} movement with a ${userApRank.record} record.` : 'Writers need more resume to pull your club into the poll.'}</p>
                         </div>
-                      )) : (
-                        <div className="table-row">
-                          <div className="table-cell">No final games yet</div>
-                          <div className="table-cell">—</div>
-                          <div className="table-cell">Play a day to populate this board.</div>
+                        <div className="info-panel">
+                          <span>Coaches Position</span>
+                          <strong>{userCoachesRank ? `#${userCoachesRank.rank}` : 'Unranked'}</strong>
+                          <p>{userCoachesRank ? `${formatTrend(userCoachesRank.trend)} movement with roster/staff context baked in.` : 'Coaches are not sold on the weekend profile yet.'}</p>
                         </div>
-                      )}
+                        <div className="info-panel">
+                          <span>RPI</span>
+                          <strong>{userRpiRank ? `#${userRpiRank.rank}` : 'N/A'}</strong>
+                          <p>{userResumeMetrics ? `RPI ${formatMetric(userResumeMetrics.rpi)} with OWP ${formatMetric(userResumeMetrics.owp)}.` : 'No resume sheet until games are logged.'}</p>
+                        </div>
+                        <div className="info-panel">
+                          <span>Resume Snapshot</span>
+                          <strong>{userResumeMetrics ? `${userResumeMetrics.qualityWins} quality wins` : 'No games yet'}</strong>
+                          <p>{userResumeMetrics ? `${userResumeMetrics.roadWins} road wins, ${userResumeMetrics.badLosses} bad losses, streak ${userResumeMetrics.streak > 0 ? `W${userResumeMetrics.streak}` : userResumeMetrics.streak < 0 ? `L${Math.abs(userResumeMetrics.streak)}` : 'Even'}.` : 'Advance the season to build a real national resume.'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="table-shell ranking-board ranking-board--featured">
+                      <div className="table-toolbar ranking-board__toolbar">
+                        <div>
+                          <span>Top 25 Overview</span>
+                          <span>{rankingRows.find((board) => board.title === overviewPollTab)?.subtitle}</span>
+                        </div>
+                        <div className="poll-tabs" role="tablist" aria-label="League overview poll selector">
+                          {rankingRows.map((board) => (
+                            <button
+                              key={`tab-${board.title}`}
+                              className={classNames('poll-tab', overviewPollTab === board.title && 'is-active')}
+                              onClick={() => setOverviewPollTab(board.title)}
+                              type="button"
+                            >
+                              {board.title}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="table-grid table-grid--rankings-simplified">
+                        <div className="table-head">#</div>
+                        <div className="table-head">Team</div>
+                        <div className="table-head">Trend</div>
+
+                        {rankingRows.find((board) => board.title === overviewPollTab)?.rows.slice(0, 25).map((row) => {
+                          const team = findProgram(row.programId);
+                          const isUser = row.programId === save.userProgramId;
+                          return (
+                            <div className="table-row" key={`${overviewPollTab}-${row.programId}`}>
+                              <div className={classNames('table-cell', 'table-cell--rank', isUser && 'table-cell--user-highlight')}>
+                                <strong>{row.rank}</strong>
+                              </div>
+                              <div className={classNames('table-cell', 'table-cell--program', isUser && 'table-cell--user-highlight')}>
+                                <strong>{team?.school ?? row.programId}</strong>
+                                <span>{row.record} • {row.note}</span>
+                              </div>
+                              <div className={classNames('table-cell', 'table-cell--trend', isUser && 'table-cell--user-highlight')}>
+                                <span>{formatTrend(row.trend)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="ranking-board__votes">
+                        <span>Receiving votes</span>
+                        <p>{rankingRows.find((board) => board.title === overviewPollTab)?.receivingVotes.map((row) => findProgram(row.programId)?.school ?? row.programId).join(', ') || 'None yet'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="two-column two-column--overview-results">
+                    <div className="table-shell">
+                      <div className="table-toolbar">
+                        <span>Major results</span>
+                        <span>Biggest final scores from the current season database</span>
+                      </div>
+                      <div className="table-grid table-grid--league-results">
+                        <div className="table-head">Game</div>
+                        <div className="table-head">Score</div>
+                        <div className="table-head">Type</div>
+
+                        {majorLeagueResults.length ? majorLeagueResults.map((result) => (
+                          <div className="table-row" key={result.id}>
+                            <div className="table-cell">{result.label}</div>
+                            <div className="table-cell">{result.score}</div>
+                            <div className="table-cell">{result.note}</div>
+                          </div>
+                        )) : (
+                          <div className="table-row">
+                            <div className="table-cell">No final games yet</div>
+                            <div className="table-cell">—</div>
+                            <div className="table-cell">Play a day to populate this board.</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="scorebox">
+                      <div className="screen__header">
+                        <div>
+                          <p className="ui-kicker">Methodology</p>
+                          <h3>How the boards think</h3>
+                        </div>
+                      </div>
+                      <div className="scorebox__line">
+                        <span>AP</span>
+                        <strong>Resume + quality wins + road work + a little brand inertia.</strong>
+                      </div>
+                      <div className="scorebox__line">
+                        <span>Coaches</span>
+                        <strong>Roster strength, staff quality, and clean weekend consistency matter more.</strong>
+                      </div>
+                      <div className="scorebox__line">
+                        <span>RPI</span>
+                        <strong>{completedLeagueGames.length ? '25% record, 50% opponent win %, 25% opponent-opponent win %.' : 'Waiting on real games before the formula has teeth.'}</strong>
+                      </div>
                     </div>
                   </div>
 
@@ -2478,6 +3553,60 @@ function App() {
                 </section>
               </>
             )}
+
+            {selectedTab === 'polls' && seasonSnapshot && (
+              <>
+                <section className="screen">
+                  <div className="screen__header">
+                    <div>
+                      <p className="ui-kicker">National Polls</p>
+                      <h2>AP Top 25, Coaches Poll, and RPI</h2>
+                    </div>
+                    <div className="screen__meta">Deep dive into the 25-team boards and the teams receiving votes.</div>
+                  </div>
+
+                  <div className="three-column">
+                    {rankingRows.map((board) => (
+                      <div className="table-shell ranking-board" key={board.title}>
+                        <div className="table-toolbar">
+                          <span>{board.title}</span>
+                          <span>{board.subtitle}</span>
+                        </div>
+                        <div className="table-grid table-grid--rankings">
+                          <div className="table-head">#</div>
+                          <div className="table-head">Team</div>
+                          <div className="table-head">Rec</div>
+                          <div className="table-head">{board.metricLabel}</div>
+
+                          {board.rows.map((row) => {
+                            const team = findProgram(row.programId);
+                            const isUser = row.programId === save.userProgramId;
+                            return (
+                              <div className="table-row" key={`${board.title}-${row.programId}`}>
+                                <div className={classNames('table-cell', 'table-cell--rank', isUser && 'table-cell--user-highlight')}>
+                                  <strong>{row.rank}</strong>
+                                  <span>{formatTrend(row.trend)}</span>
+                                </div>
+                                <div className={classNames('table-cell', 'table-cell--program', isUser && 'table-cell--user-highlight')}>
+                                  <strong>{team?.school ?? row.programId}</strong>
+                                  <span>{row.note}</span>
+                                </div>
+                                <div className={classNames('table-cell', isUser && 'table-cell--user-highlight')}>{row.record}</div>
+                                <div className={classNames('table-cell', isUser && 'table-cell--user-highlight')}>{board.title === 'RPI' ? row.sortMetric : Math.round(row.score)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="ranking-board__votes">
+                          <span>Receiving votes</span>
+                          <p>{board.receivingVotes.map((row) => findProgram(row.programId)?.school ?? row.programId).join(', ') || 'None yet'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
 
           <aside className="inspector">
@@ -2528,17 +3657,6 @@ function App() {
                 )) : <div className="inspector-empty">No active review flags.</div>}
               </div>
 
-              <div className="inspector-block">
-                <div className="inspector-block__title">
-                  <BarChart3 size={15} />
-                  <strong>League notes</strong>
-                </div>
-                <ul className="compact-list">
-                  <li>Midweeks are intentionally looser than weekend openers.</li>
-                  <li>Bullpen trust is one of the main upset levers.</li>
-                  <li>Prestige shapes roster building, not direct game outcomes.</li>
-                </ul>
-              </div>
             </section>
           </aside>
         </section>

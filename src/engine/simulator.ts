@@ -846,7 +846,7 @@ function rotatePairings(entries: typeof programs, offset: number) {
 function homeAwayForPair(leftId: string, rightId: string, week: number, game: number) {
   const left = findProgram(leftId)!;
   const right = findProgram(rightId)!;
-  const leftHome = (week + game + left.prestige.history.avgRpiRank + right.prestige.history.cwsTrips) % 2 === 0;
+  const leftHome = (week + game + left.prestige.overall + right.prestige.overall) % 2 === 0;
   return {
     homeProgramId: leftHome ? leftId : rightId,
     awayProgramId: leftHome ? rightId : leftId,
@@ -873,7 +873,6 @@ function addDeficitShowcaseGames(games: GameContext[]) {
       .filter((program) => (gameCounts.get(program.id) ?? 0) < 56 && !occupiedDates.get(program.id)?.has(dateLabel))
       .sort((left, right) =>
         (gameCounts.get(left.id) ?? 0) - (gameCounts.get(right.id) ?? 0)
-        || left.region.localeCompare(right.region)
         || right.prestige.overall - left.prestige.overall,
       );
 
@@ -982,6 +981,27 @@ export function createSeasonDatabase(): SeasonDatabase {
     completedDays: [],
     games,
   };
+}
+
+function isProgramGame(game: SeasonGameRecord, programId: string) {
+  return game.context.homeProgramId === programId || game.context.awayProgramId === programId;
+}
+
+export function getProgramSeasonSchedule(season: SeasonDatabase, programId: string) {
+  return season.games.filter((game) => isProgramGame(game, programId));
+}
+
+export function getNextScheduledDayNumber(season: SeasonDatabase) {
+  return season.games.find((game) => game.status === 'scheduled')?.dayNumber ?? null;
+}
+
+export function getScheduledProgramGameForDay(season: SeasonDatabase, programId: string, dayNumber: number) {
+  return getProgramSeasonSchedule(season, programId)
+    .find((game) => game.status === 'scheduled' && game.dayNumber === dayNumber) ?? null;
+}
+
+export function getNextScheduledProgramGame(season: SeasonDatabase, programId: string) {
+  return getProgramSeasonSchedule(season, programId).find((game) => game.status === 'scheduled') ?? null;
 }
 
 export function simulateSeasonOutlook(programId: string, roster: Player[], simulations = 24): SeasonOutlook {
@@ -1234,8 +1254,9 @@ export function simulateSeasonDay(
   season: SeasonDatabase,
   userProgramId: string,
   userRoster: Player[],
+  leagueRosters?: Record<string, Player[]>,
 ): { season: SeasonDatabase; userGame: GameResult | null } | null {
-  const nextDayNumber = season.games.find((game) => game.status === 'scheduled')?.dayNumber;
+  const nextDayNumber = getNextScheduledDayNumber(season);
   if (!nextDayNumber) {
     return null;
   }
@@ -1249,10 +1270,10 @@ export function simulateSeasonDay(
 
     const homeRoster = game.context.homeProgramId === userProgramId
       ? userRoster
-      : createOpponentRoster(game.context.homeProgramId);
+      : createOpponentRoster(game.context.homeProgramId, leagueRosters);
     const awayRoster = game.context.awayProgramId === userProgramId
       ? userRoster
-      : createOpponentRoster(game.context.awayProgramId);
+      : createOpponentRoster(game.context.awayProgramId, leagueRosters);
     const result = simulateGame(game.context, homeRoster, awayRoster, `season-db-${game.id}`);
     if (game.context.homeProgramId === userProgramId || game.context.awayProgramId === userProgramId) {
       userGame = result;
@@ -1277,10 +1298,15 @@ export function simulateSeasonDay(
   };
 }
 
-export function simulateLeagueSeasonSnapshot(userProgramId: string, userRoster: Player[], weeksPlayed = 14): LeagueSeasonSnapshot {
+export function simulateLeagueSeasonSnapshot(
+  userProgramId: string,
+  userRoster: Player[],
+  weeksPlayed = 14,
+  leagueRosters?: Record<string, Player[]>,
+): LeagueSeasonSnapshot {
   const rosterMap = new Map<string, Player[]>();
   for (const program of programs) {
-    rosterMap.set(program.id, program.id === userProgramId ? userRoster : createOpponentRoster(program.id));
+    rosterMap.set(program.id, program.id === userProgramId ? userRoster : createOpponentRoster(program.id, leagueRosters));
   }
 
   const results = createLeagueSchedule()
@@ -1308,7 +1334,10 @@ function calcOps(line: PlayerBattingLine) {
 
 const opponentRosterCache = new Map<string, Player[]>();
 
-function createOpponentRoster(programId: string) {
+function createOpponentRoster(programId: string, leagueRosters?: Record<string, Player[]>) {
+  if (leagueRosters?.[programId]) {
+    return leagueRosters[programId];
+  }
   if (!opponentRosterCache.has(programId)) {
     opponentRosterCache.set(programId, createRosterForProgram(programId));
   }
