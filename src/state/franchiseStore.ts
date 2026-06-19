@@ -948,6 +948,20 @@ function resolveRecruiting(save: FranchiseSave) {
     const topAiScore = topAiSchool?.score ?? 0;
     const topAiId = topAiSchool?.programId ?? '';
 
+    // Flip warning: targeted recruit where user leads but rival is closing within 8 points
+    const userRankIndex = allScores.findIndex((s) => s.programId === save.userProgramId);
+    if (
+      recruit.targeted &&
+      !recruit.committedProgramId &&
+      userRankIndex === 0 &&
+      topAiScore > 0 &&
+      (userScore - topAiScore) < 8 &&
+      (userScore - topAiScore) > 0
+    ) {
+      const rivalName = findProgram(topAiId)?.school ?? 'a rival';
+      logSaveEvent(save, `${rivalName} is closing fast on ${recruit.name} — consider upgrading your offer or pitch.`, { type: 'recruiting' as const });
+    }
+
     if (recruit.userOffer && userScore > topAiScore + recruit.signability * 0.35) {
       setProgramRoster(save, save.userProgramId, [...getProgramRosterFromSave(save, save.userProgramId), toSignedPlayer(save.userProgramId, recruit, index)]);
       logSaveEvent(save, `${recruit.name} committed after a strong NIL + scholarship package.`);
@@ -1785,18 +1799,24 @@ export const useFranchiseStore = create<FranchiseState>()(
       }),
       offerRecruit: (recruitId, scholarshipPct, nilValue) => set((state) => {
         if (!state.save) return state;
+        const recruit = state.save.recruits.find((r) => r.id === recruitId);
+        if (!recruit) return state;
         const allowedScholarshipPct = Math.min(
           scholarshipPct,
           availableScholarshipPct(state.save, { excludeRecruitId: recruitId }),
         );
-        const eventEntry = `Offered ${allowedScholarshipPct}% plus $${nilValue.toLocaleString()} NIL to recruit target ${recruitId}.`;
+        const allowedNilValue = Math.min(
+          nilValue,
+          availableNilPool(state.save, { excludeRecruitId: recruitId }),
+        );
+        const eventEntry = `Offered ${allowedScholarshipPct}% plus $${allowedNilValue.toLocaleString()} NIL to ${recruit.name}.`;
         return {
           save: {
             ...state.save,
-            recruits: state.save.recruits.map((recruit) =>
-              recruit.id === recruitId
-                ? { ...recruit, userOffer: { scholarshipPct: allowedScholarshipPct, nilValue }, interest: clamp(recruit.interest + 8, 0, 100) }
-                : recruit,
+            recruits: state.save.recruits.map((r) =>
+              r.id === recruitId
+                ? { ...r, userOffer: { scholarshipPct: allowedScholarshipPct, nilValue: allowedNilValue }, interest: clamp(r.interest + 8, 0, 100) }
+                : r,
             ),
             eventLog: prependEventLogEntries(state.save.eventLog, [eventEntry]),
             mail: prependMailEntries(state.save.mail, [eventEntry]),

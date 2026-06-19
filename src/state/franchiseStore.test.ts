@@ -186,7 +186,8 @@ describe('franchise roster lifecycle', () => {
     useFranchiseStore.getState().wipeSave();
     useFranchiseStore.getState().createFranchise(userProgramId);
 
-    useFranchiseStore.getState().offerRecruit('test-recruit', 25, 5000);
+    const firstRecruitId = useFranchiseStore.getState().save?.recruits[0]?.id ?? 'test-recruit';
+    useFranchiseStore.getState().offerRecruit(firstRecruitId, 25, 5000);
     useFranchiseStore.getState().changeSchoolSponsor('Louisville Slugger');
     const offeredMail = useFranchiseStore.getState().save?.mail[1];
     const sponsorMail = useFranchiseStore.getState().save?.mail[0];
