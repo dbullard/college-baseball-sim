@@ -1008,6 +1008,37 @@ function recruitStatusTone(recruit: Recruit) {
   return 'is-open';
 }
 
+type CommitmentStage = 'cold' | 'evaluating' | 'interested' | 'leader' | 'lock';
+
+function getCommitmentStage(interest: number): CommitmentStage {
+  if (interest >= 85) return 'lock';
+  if (interest >= 66) return 'leader';
+  if (interest >= 46) return 'interested';
+  if (interest >= 26) return 'evaluating';
+  return 'cold';
+}
+
+const STAGE_CONFIG: Record<CommitmentStage, { label: string; color: string }> = {
+  cold:       { label: 'Cold',       color: '#6b7280' },
+  evaluating: { label: 'Evaluating', color: '#3b82f6' },
+  interested: { label: 'Interested', color: '#eab308' },
+  leader:     { label: 'Leader',     color: '#f97316' },
+  lock:       { label: 'Lock',       color: '#22c55e' },
+};
+
+function CommitmentChip({ interest }: { interest: number }) {
+  const stage = getCommitmentStage(interest);
+  const { label, color } = STAGE_CONFIG[stage];
+  return (
+    <span
+      className="dossier-chip"
+      style={{ backgroundColor: color, color: '#fff', fontWeight: 700, fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px' }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function buildRecruitPreviewStats(recruit: Recruit) {
   const offense = recruit.offense;
   const pitching = recruit.pitching;
@@ -2793,7 +2824,10 @@ function App() {
                               <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
                               <span>{recruit.primaryPosition} • {recruit.stars}★ • scout {recruit.scoutingLevel ?? 0}/3</span>
                             </div>
-                            <div className="table-cell">{recruit.interest} • {interestLabel(recruit.interest)}</div>
+                            <div className="table-cell" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <CommitmentChip interest={recruit.interest} />
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{recruit.interest}</span>
+                            </div>
                             <div className="table-cell">{recruit.weeklyPointsSpent ?? 0} pts</div>
                             <div className="table-cell table-cell--actions">
                               {recruitingActionButtons.map((action) => (
@@ -2858,7 +2892,10 @@ function App() {
                         <div className="table-cell">{recruit.primaryPosition}</div>
                         <div className="table-cell">{recruit.stars}</div>
                         <div className="table-cell">{recruit.hometown?.city}, {recruit.hometown?.state}</div>
-                        <div className="table-cell">{recruit.interest} • {interestLabel(recruit.interest)}</div>
+                        <div className="table-cell" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <CommitmentChip interest={recruit.interest} />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{recruit.interest}</span>
+                        </div>
                         <div className="table-cell">{recruit.signability} • {signabilityLabel(recruit.signability)}</div>
                         <div className="table-cell">{recruitFit.needFit.label} • {recruitFit.coachFit.summary}</div>
                         <div className="table-cell">
@@ -2950,7 +2987,19 @@ function App() {
                         <div><span>Hometown</span><strong>{recruit.hometown.city}, {recruit.hometown.state}</strong></div>
                         <div><span>Stars</span><strong>{'★'.repeat(recruit.stars)}</strong></div>
                         <div><span>Position</span><strong>{recruit.primaryPosition}</strong></div>
-                        <div><span>Interest</span><strong>{recruit.interest} • {interestLabel(recruit.interest)}</strong></div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <span>Commitment Stage</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                            <CommitmentChip interest={recruit.interest} />
+                            <div style={{ flex: 1, height: '6px', background: 'var(--surface-raised)', borderRadius: '3px' }}>
+                              <div style={{ width: `${recruit.interest}%`, height: '100%', background: STAGE_CONFIG[getCommitmentStage(recruit.interest)].color, borderRadius: '3px', transition: 'width 0.3s' }} />
+                            </div>
+                            <span style={{ fontSize: '0.75rem', minWidth: '28px', textAlign: 'right' }}>{recruit.interest}</span>
+                          </div>
+                          {getCommitmentStage(recruit.interest) === 'leader' && !recruit.userOffer && (
+                            <p style={{ fontSize: '0.72rem', color: '#f97316', marginTop: '4px' }}>You're the leader — make an offer to close.</p>
+                          )}
+                        </div>
                         <div><span>Dealbreaker</span><strong>{recruit.dealbreaker?.toUpperCase() ?? 'NONE'}</strong></div>
                         <div><span>Scouting</span><strong>{recruit.scoutingLevel ?? 0}/3</strong></div>
                         <div><span>Likely to Sign</span><strong>{recruit.signability}</strong></div>
