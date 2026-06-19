@@ -270,6 +270,7 @@ export interface Recruit {
   stars: 2 | 3 | 4 | 5;
   interest: number;
   signability: number;
+  askingNil: number;
   developmentCurve: number;
   marketability: number;
   preferences: PlayerPreferences;
