@@ -24,7 +24,7 @@ import {
 import { findProgram, programs } from './data/programs';
 import { createProgramSchedule, getNextScheduledDayNumber, getProgramSeasonSchedule, getScheduledProgramGameForDay, initializeLeaguePostseason } from './engine/simulator';
 import { buildTeamChemistryProfile, calculateCoachFit, getArchetypeDefinition, getProgramDevelopmentIdentity } from './lib/playerDevelopment';
-import { advanceFranchiseSave, buildNextUserPreview, buildSeasonSnapshot, calculateRecruitProgramFit, calculateSchoolGrades, getProgramRosterFromSave, getProgramStaffFromSave, selectSeasonOutlook, useFranchiseStore } from './state/franchiseStore';
+import { advanceFranchiseSave, availableNilPool, buildNextUserPreview, buildSeasonSnapshot, calculateRecruitProgramFit, calculateSchoolGrades, getProgramRosterFromSave, getProgramStaffFromSave, selectSeasonOutlook, useFranchiseStore } from './state/franchiseStore';
 import type {
   CoachRole,
   LeagueCoachingStaffs,
@@ -2897,7 +2897,7 @@ function App() {
                         {targetedRecruits.map((recruit) => (
                           <div className="table-row" key={recruit.id}>
                             <div className="table-cell table-cell--program">
-                              <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
+                              <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? recruit.askingNil ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
                               <span>{recruit.primaryPosition} • {recruit.stars}★ • scout {recruit.scoutingLevel ?? 0}/3</span>
                               {(() => {
                                 const rival = getRivalDisplay(recruit, save.userProgramId);
@@ -2995,7 +2995,7 @@ function App() {
                         return (
                       <div className="table-row" key={recruit.id}>
                         <div className="table-cell table-cell--program">
-                          <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
+                          <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? recruit.askingNil ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
                         </div>
                         <div className="table-cell">{recruit.primaryPosition}</div>
                         <div className="table-cell">{recruit.stars}</div>
@@ -3413,22 +3413,63 @@ function App() {
 
                       {recruit.targeted && !recruit.committedProgramId && (
                         <div className="dossier-offer-form">
-                          <label>
-                            <span>Scholarship %</span>
-                            <input type="number" min="0" max="100" className="ui-input" value={offerScholly} onChange={(e) => setOfferScholly(Number(e.target.value))} />
-                          </label>
-                          <label>
-                            <span>NIL Cash</span>
-                            <input type="number" min="0" step="1000" className="ui-input" value={offerNIL} onChange={(e) => setOfferNIL(Number(e.target.value))} />
-                          </label>
-                          <button className="ui-button ui-button--primary" onClick={() => offerRecruit(recruit.id, offerScholly, offerNIL)}>
-                            Submit Offer
-                          </button>
-                          {recruit.userOffer && (
-                            <div className="dossier-inline-note">
-                              Current Offer: {recruit.userOffer.scholarshipPct}% + ${recruit.userOffer.nilValue.toLocaleString()}
-                            </div>
-                          )}
+                          {(() => {
+                            const nilPool = availableNilPool(save, { excludeRecruitId: recruit.id });
+                            const nilAsk = recruit.askingNil ?? 0;
+                            const nilGrade = nilAsk === 0 ? 'A'
+                              : offerNIL >= nilAsk ? 'A'
+                              : offerNIL >= nilAsk * 0.75 ? 'B'
+                              : offerNIL >= nilAsk * 0.5 ? 'C'
+                              : offerNIL >= nilAsk * 0.25 ? 'D'
+                              : 'F';
+                            const canMeetAsk = nilPool >= nilAsk;
+
+                            return (
+                              <>
+                                <label>
+                                  <span>Scholarship %</span>
+                                  <input type="number" min="0" max="100" className="ui-input" value={offerScholly} onChange={(e) => setOfferScholly(Number(e.target.value))} />
+                                </label>
+
+                                <label>
+                                  <span>NIL Offer</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1000"
+                                    className="ui-input"
+                                    value={offerNIL}
+                                    onChange={(e) => setOfferNIL(Number(e.target.value))}
+                                  />
+                                </label>
+
+                                <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '3px', color: 'var(--text-muted)' }}>
+                                  <span>His ask: <strong style={{ color: 'var(--text)' }}>${nilAsk.toLocaleString()}</strong></span>
+                                  <span>Your NIL available: <strong style={{ color: nilPool < nilAsk ? '#ef4444' : 'var(--text)' }}>${nilPool.toLocaleString()}</strong></span>
+                                  <span>NIL grade: <strong style={{ color: nilGrade === 'A' ? '#22c55e' : nilGrade === 'B' ? '#f97316' : '#ef4444' }}>{nilGrade}</strong></span>
+                                  {!canMeetAsk && nilAsk > 0 && (
+                                    <span style={{ color: '#ef4444' }}>⚠ Below his ask — limited NIL impact</span>
+                                  )}
+                                  {offerNIL > nilAsk && (
+                                    <span style={{ color: '#22c55e' }}>Going over ask — small signability bonus</span>
+                                  )}
+                                </div>
+
+                                <button
+                                  className="ui-button ui-button--primary"
+                                  onClick={() => offerRecruit(recruit.id, offerScholly, offerNIL)}
+                                >
+                                  Submit Offer
+                                </button>
+
+                                {recruit.userOffer && (
+                                  <div className="dossier-inline-note">
+                                    Current Offer: {recruit.userOffer.scholarshipPct}% + ${recruit.userOffer.nilValue.toLocaleString()}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
