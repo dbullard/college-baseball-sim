@@ -4036,12 +4036,21 @@ function derivePrestigeProfile(input: ProgramInput): PrestigeProfile {
 }
 
 function deriveProgramResources(prestige: PrestigeProfile) {
-  const baseNil = 50000;
-  const scalingNil = Math.max(0, (prestige.nilAttractiveness - 50) * 25000);
-  
+  const p = prestige.overall;
+  const donorFactor = (prestige.competitivePrestige - 50) / 100; // -0.5 to +0.5
+  const [baseNil, maxNil] = p >= 95 ? [1_800_000, 3_000_000]
+    : p >= 85 ? [800_000, 1_800_000]
+    : p >= 75 ? [250_000, 800_000]
+    : p >= 65 ? [75_000, 250_000]
+    : [20_000, 75_000];
+  const schoolNilPool = Math.round(clamp(
+    baseNil + (maxNil - baseNil) * (0.5 + donorFactor),
+    baseNil,
+    maxNil,
+  ));
   return {
     scholarshipBudget: NCAA_D1_EQUIVALENCY_CAP,
-    schoolNilPool: baseNil + scalingNil,
+    schoolNilPool,
     donorConfidence: prestige.competitivePrestige,
     facilities: prestige.developmentReputation,
   };
@@ -4391,6 +4400,21 @@ function createRecruitPool(programId: string, year: number, size: number, namesp
     const primaryPosition = random.pick(positionPool);
     const stars = random.next() > 0.9 ? 5 : random.next() > 0.65 ? 4 : random.next() > 0.3 ? 3 : 2;
     const base = 41 + stars * 5 + random.int(-5, 7);
+
+    // NIL ask derived from star tier + marketability
+    const nilRanges: Record<number, [number, number]> = {
+      2: [5_000, 25_000],
+      3: [25_000, 75_000],
+      4: [75_000, 200_000],
+      5: [200_000, 600_000],
+    };
+    const [nilMin, nilMax] = nilRanges[stars] ?? [5_000, 25_000];
+    const marketMod = Math.round(((base - 50) / 50) * (nilMax - nilMin) * 0.25);
+    const askingNil = clamp(
+      nilMin + Math.round((nilMax - nilMin) * random.next()) + marketMod,
+      nilMin,
+      nilMax,
+    );
     return {
       id: `${namespace}-year${year}-${index}`,
       name: createName(`${namespace}-name-${year}-${index}`, usedNames),
@@ -4400,6 +4424,7 @@ function createRecruitPool(programId: string, year: number, size: number, namesp
       stars,
       interest: clamp(Math.round(prestige * 0.35 + random.int(5, 40)), 20, 95),
       signability: clamp(45 + stars * 9 + random.int(-6, 15), 35, 99),
+      askingNil,
       developmentCurve: clamp(base + random.int(-5, 8), 45, 99),
       marketability: clamp(base + random.int(-10, 12), 40, 99),
       dealbreaker: random.pick(['proximity', 'playingTime', 'prestige', 'nil', 'development', 'none'] as any),

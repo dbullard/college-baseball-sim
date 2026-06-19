@@ -76,3 +76,36 @@ describe('player generation', () => {
     expect(chemistryWithLeaders.score).toBeGreaterThan(chemistryWithoutLeaders.score);
   });
 });
+
+describe('NIL system', () => {
+  it('gives every recruit an askingNil within their star tier range', () => {
+    const board = createRecruitBoard(eliteProgramId, 1);
+    const twoStar = board.filter((r) => r.stars === 2);
+    const threeStar = board.filter((r) => r.stars === 3);
+    const fourStar = board.filter((r) => r.stars === 4);
+    const fiveStar = board.filter((r) => r.stars === 5);
+
+    expect(twoStar.every((r) => r.askingNil >= 5_000 && r.askingNil <= 25_000)).toBe(true);
+    expect(threeStar.every((r) => r.askingNil >= 25_000 && r.askingNil <= 75_000)).toBe(true);
+    expect(fourStar.every((r) => r.askingNil >= 75_000 && r.askingNil <= 200_000)).toBe(true);
+    expect(fiveStar.every((r) => r.askingNil >= 200_000 && r.askingNil <= 600_000)).toBe(true);
+  });
+
+  it('gives elite programs (prestige 95+) at least $1.8M NIL pool', () => {
+    const elitePrograms = programs.filter((p) => p.prestige.overall >= 95);
+    expect(elitePrograms.every((p) => p.resources.schoolNilPool >= 1_800_000)).toBe(true);
+  });
+
+  it('gives mid-major programs (prestige < 65) at most $75K NIL pool', () => {
+    const lowPrestige = programs.filter((p) => p.prestige.overall < 65);
+    expect(lowPrestige.every((p) => p.resources.schoolNilPool <= 75_000)).toBe(true);
+  });
+
+  it('gives programs with higher prestige meaningfully larger NIL pools than lower prestige', () => {
+    const elite = programs.find((p) => p.prestige.overall >= 95)!;
+    const mid = programs.find((p) => p.prestige.overall >= 75 && p.prestige.overall < 85)!;
+    const low = programs.find((p) => p.prestige.overall < 65)!;
+    expect(elite.resources.schoolNilPool).toBeGreaterThan(mid.resources.schoolNilPool);
+    expect(mid.resources.schoolNilPool).toBeGreaterThan(low.resources.schoolNilPool);
+  });
+});
