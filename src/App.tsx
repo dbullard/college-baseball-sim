@@ -2978,7 +2978,12 @@ function App() {
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{recruit.interest}</span>
                         </div>
                         <div className="table-cell">{recruit.signability} • {signabilityLabel(recruit.signability)}</div>
-                        <div className="table-cell">{recruitFit.needFit.label} • {recruitFit.coachFit.summary}</div>
+                        <div className="table-cell">
+                          {(recruit.scoutingLevel ?? 0) >= 1
+                            ? `${recruitFit.needFit.label} • ${recruitFit.coachFit.summary}`
+                            : <span style={{ color: 'var(--text-muted)' }}>Scout to reveal</span>
+                          }
+                        </div>
                         <div className="table-cell">
                           {recruit.committedProgramId ? `Committed: ${findProgram(recruit.committedProgramId)?.school ?? 'Elsewhere'}` : recruit.targeted ? 'Targeted' : 'Open'}
                         </div>
@@ -3045,7 +3050,7 @@ function App() {
                         <span>{'★'.repeat(recruit.stars)}</span>
                         <span>{recruit.hometown.city}, {recruit.hometown.state}</span>
                         <span>{recruit.marketability} marketability</span>
-                        <span>Dealbreaker: {recruit.dealbreaker?.toUpperCase() ?? 'NONE'}</span>
+                        <span>Dealbreaker: {(recruit.scoutingLevel ?? 0) >= 3 ? (recruit.dealbreaker?.toUpperCase() ?? 'NONE') : '???'}</span>
                       </div>
                     </div>
                     <div className="dossier-hero__status">
@@ -3081,7 +3086,10 @@ function App() {
                             <p style={{ fontSize: '0.72rem', color: '#f97316', marginTop: '4px' }}>You're the leader — make an offer to close.</p>
                           )}
                         </div>
-                        <div><span>Dealbreaker</span><strong>{recruit.dealbreaker?.toUpperCase() ?? 'NONE'}</strong></div>
+                        <div>
+                          <span>Dealbreaker</span>
+                          <strong>{(recruit.scoutingLevel ?? 0) >= 3 ? (recruit.dealbreaker?.toUpperCase() ?? 'NONE') : '??? (Scout to level 3)'}</strong>
+                        </div>
                         <div><span>Scouting</span><strong>{recruit.scoutingLevel ?? 0}/3</strong></div>
                         <div><span>Likely to Sign</span><strong>{recruit.signability}</strong></div>
                         <div><span>Dev Curve</span><strong>{recruit.developmentCurve}</strong></div>
@@ -3108,40 +3116,48 @@ function App() {
                         <strong>{recruit.targeted ? 'Active target' : 'Open evaluation'}</strong>
                       </div>
                       <div className="dossier-rating-columns">
-                        {recruitOffenseRatings.length > 0 && (
-                          <div>
-                            <p className="dossier-card__subhead">Hitting</p>
-                            {recruitOffenseRatings.map(([label, value]) => (
-                              <div className="dossier-rating-row" key={label}>
-                                <span>{label}</span>
-                                <div className="dossier-rating-row__track"><div className="dossier-rating-row__fill" style={{ width: percentFromRating(value) }} /></div>
-                                <strong>{value}</strong>
+                        {(recruit.scoutingLevel ?? 0) >= 2 ? (
+                          <>
+                            {recruitOffenseRatings.length > 0 && (
+                              <div>
+                                <p className="dossier-card__subhead">Hitting</p>
+                                {recruitOffenseRatings.map(([label, value]) => (
+                                  <div className="dossier-rating-row" key={label}>
+                                    <span>{label}</span>
+                                    <div className="dossier-rating-row__track"><div className="dossier-rating-row__fill" style={{ width: percentFromRating(value) }} /></div>
+                                    <strong>{value}</strong>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        )}
-                        {recruitPitchingRatings.length > 0 && (
-                          <div>
-                            <p className="dossier-card__subhead">Pitching</p>
-                            {recruitPitchingRatings.map(([label, value]) => (
-                              <div className="dossier-rating-row" key={label}>
-                                <span>{label}</span>
-                                <div className="dossier-rating-row__track"><div className="dossier-rating-row__fill is-secondary" style={{ width: percentFromRating(value) }} /></div>
-                                <strong>{value}</strong>
+                            )}
+                            {recruitPitchingRatings.length > 0 && (
+                              <div>
+                                <p className="dossier-card__subhead">Pitching</p>
+                                {recruitPitchingRatings.map(([label, value]) => (
+                                  <div className="dossier-rating-row" key={label}>
+                                    <span>{label}</span>
+                                    <div className="dossier-rating-row__track"><div className="dossier-rating-row__fill is-secondary" style={{ width: percentFromRating(value) }} /></div>
+                                    <strong>{value}</strong>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        )}
-                        <div>
-                          <p className="dossier-card__subhead">Defense / Traits</p>
-                          {recruitDefenseRatings.map(([label, value]) => (
-                            <div className="dossier-rating-row" key={label}>
-                              <span>{label}</span>
-                              <div className="dossier-rating-row__track"><div className="dossier-rating-row__fill is-tertiary" style={{ width: percentFromRating(value) }} /></div>
-                              <strong>{value}</strong>
+                            )}
+                            <div>
+                              <p className="dossier-card__subhead">Defense / Traits</p>
+                              {recruitDefenseRatings.map(([label, value]) => (
+                                <div className="dossier-rating-row" key={label}>
+                                  <span>{label}</span>
+                                  <div className="dossier-rating-row__track"><div className="dossier-rating-row__fill is-tertiary" style={{ width: percentFromRating(value) }} /></div>
+                                  <strong>{value}</strong>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </>
+                        ) : (
+                          <div style={{ padding: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Ratings locked — scout to level 2 to reveal.
+                          </div>
+                        )}
                       </div>
                     </article>
                   </div>
@@ -3190,11 +3206,21 @@ function App() {
                       <div className="table-grid table-grid--player-summary">
                         <div className="table-head">Factor</div>
                         <div className="table-head">Grade</div>
-                        <div className="table-row"><div className="table-cell">Proximity ({recruit.preferences.proximity})</div><div className="table-cell">{grades.proximity}</div></div>
-                        <div className="table-row"><div className="table-cell">Playing time ({recruit.preferences.playingTime})</div><div className="table-cell">{grades.playingTime}</div></div>
-                        <div className="table-row"><div className="table-cell">Prestige ({recruit.preferences.prestige})</div><div className="table-cell">{grades.prestige}</div></div>
-                        <div className="table-row"><div className="table-cell">NIL ({recruit.preferences.nil})</div><div className="table-cell">{grades.nil}</div></div>
-                        <div className="table-row"><div className="table-cell">Development ({recruit.preferences.development})</div><div className="table-cell">{grades.development}</div></div>
+                        {(recruit.scoutingLevel ?? 0) >= 1 ? (
+                          <>
+                            <div className="table-row"><div className="table-cell">Proximity ({recruit.preferences.proximity})</div><div className="table-cell">{grades.proximity}</div></div>
+                            <div className="table-row"><div className="table-cell">Playing time ({recruit.preferences.playingTime})</div><div className="table-cell">{grades.playingTime}</div></div>
+                            <div className="table-row"><div className="table-cell">Prestige ({recruit.preferences.prestige})</div><div className="table-cell">{grades.prestige}</div></div>
+                            <div className="table-row"><div className="table-cell">NIL ({recruit.preferences.nil})</div><div className="table-cell">{grades.nil}</div></div>
+                            <div className="table-row"><div className="table-cell">Development ({recruit.preferences.development})</div><div className="table-cell">{grades.development}</div></div>
+                          </>
+                        ) : (
+                          <div className="table-row">
+                            <div className="table-cell" style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              Scout this recruit (level 1+) to reveal what he cares about.
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3206,7 +3232,11 @@ function App() {
                         <strong>{(recruit.topSchools ?? []).length || 0} tracked</strong>
                       </div>
                       <div className="dossier-school-list">
-                        {(recruit.topSchools ?? []).map((school, index) => {
+                        {(recruit.scoutingLevel ?? 0) < 3 ? (
+                          <div className="dossier-empty-state">Fully scout this recruit (level 3) to reveal which schools are competing.</div>
+                        ) : (recruit.topSchools ?? []).length === 0 ? (
+                          <div className="dossier-empty-state">No scouting data available yet. Advance a week to see how the board is moving.</div>
+                        ) : (recruit.topSchools ?? []).map((school, index) => {
                           const p = programs.find((x) => x.id === school.programId);
                           if (!p) return null;
                           const isUser = p.id === save.userProgramId;
@@ -3222,9 +3252,6 @@ function App() {
                             </div>
                           );
                         })}
-                        {(!recruit.topSchools || recruit.topSchools.length === 0) && (
-                          <div className="dossier-empty-state">No scouting data available yet. Advance a week to see how the board is moving.</div>
-                        )}
                       </div>
                     </div>
 
