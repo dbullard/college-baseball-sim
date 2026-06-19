@@ -180,4 +180,45 @@ describe('franchise roster lifecycle', () => {
     expect(after.save?.season?.currentDayNumber).toBe(0);
     expect(after.save?.season?.games.every((game) => game.status === 'scheduled')).toBe(true);
   });
+
+  it('tracks unread mail and supports batch actions in the mailbox', () => {
+    const userProgramId = programs[0]!.id;
+    useFranchiseStore.getState().wipeSave();
+    useFranchiseStore.getState().createFranchise(userProgramId);
+
+    useFranchiseStore.getState().offerRecruit('test-recruit', 25, 5000);
+    useFranchiseStore.getState().changeSchoolSponsor('Louisville Slugger');
+    const offeredMail = useFranchiseStore.getState().save?.mail[1];
+    const sponsorMail = useFranchiseStore.getState().save?.mail[0];
+
+    expect(offeredMail).toBeDefined();
+    expect(sponsorMail).toBeDefined();
+    expect(offeredMail?.readAt).toBeNull();
+    expect(sponsorMail?.readAt).toBeNull();
+
+    useFranchiseStore.getState().markMailRead([offeredMail!.id, sponsorMail!.id]);
+    expect(useFranchiseStore.getState().save?.mail[0]?.readAt).toBeTruthy();
+    expect(useFranchiseStore.getState().save?.mail[1]?.readAt).toBeTruthy();
+
+    useFranchiseStore.getState().deleteMail([offeredMail!.id, sponsorMail!.id]);
+    expect(useFranchiseStore.getState().save?.mail.some((message) => message.id === offeredMail!.id || message.id === sponsorMail!.id)).toBe(false);
+  });
+
+  it('advances only one user game at a time during season day simulation', () => {
+    const userProgramId = programs[0]!.id;
+    let save = createInitialSave(userProgramId);
+    save.openingDayReady = true;
+    save.phase = 'opening-day';
+
+    const before = save.seasonSnapshot?.teamStats.find((line) => line.programId === userProgramId);
+    save = advanceFranchiseSave(save);
+    const after = save.seasonSnapshot?.teamStats.find((line) => line.programId === userProgramId);
+
+    const beforeGames = (before?.wins ?? 0) + (before?.losses ?? 0);
+    const afterGames = (after?.wins ?? 0) + (after?.losses ?? 0);
+
+    expect(afterGames - beforeGames).toBeLessThanOrEqual(1);
+    expect(save.season?.lastSimulatedDayLabel).toBe('Week 1 Friday');
+    expect(save.currentWeek).toBe(9);
+  });
 });

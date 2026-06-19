@@ -47,9 +47,11 @@ export type SeasonPhase =
   | 'certification'
   | 'opening-day'
   | 'in-season'
+  | 'postseason'
   | 'season-complete';
 export type DealStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'flagged';
 export type PostseasonStage = 'regular-season' | 'conference' | 'regional' | 'super-regional' | 'mcws';
+export type PostseasonWeekStage = 'selection' | 'regionals' | 'super-regionals' | 'mcws' | 'finals' | 'complete';
 export type WeekFocus = 'recruiting' | 'portal' | 'compliance' | 'roster' | 'opening-day';
 export type RecruitingActionId =
   | 'scout'
@@ -67,6 +69,7 @@ export type PersonalityType =
   | 'individualist'
   | 'volatile-competitor';
 export type CoachRole = 'headCoach' | 'assistantHitting' | 'assistantPitching' | 'assistantDevelopment';
+export type MailType = 'clubhouse' | 'recruiting' | 'portal' | 'staff' | 'league' | 'system';
 
 export interface Location {
   city: string;
@@ -354,7 +357,7 @@ export interface LineupCard {
 }
 
 export interface PitchingPlan {
-  gameType: 'midweek' | 'weekend';
+  gameType: 'midweek' | 'weekend' | 'postseason';
   rotationSlot: 0 | 1 | 2 | 3;
   starterPitchLimit: number;
   bullpenAggression: number;
@@ -371,6 +374,7 @@ export interface GameContext {
   homeTravelDays: number;
   awayTravelDays: number;
   postseasonStage: PostseasonStage;
+  neutralSite?: boolean;
 }
 
 export interface PitcherUsageLine {
@@ -500,6 +504,48 @@ export interface LeagueSeasonSnapshot {
   battingLeaders: PlayerBattingLine[];
   pitchingLeaders: PlayerPitchingLine[];
   fieldingLeaders: PlayerFieldingLine[];
+  postseason?: LeaguePostseasonSummary;
+}
+
+export interface PostseasonTeamSeed {
+  programId: string;
+  nationalSeed: number;
+  regionalSeed: number;
+}
+
+export interface PostseasonSeriesSummary {
+  label: string;
+  stage: PostseasonStage;
+  hostProgramId?: string;
+  teamIds: string[];
+  winnerProgramId?: string;
+  loserProgramId?: string;
+  winsByProgram: Record<string, number>;
+}
+
+export interface PostseasonRegionalSummary extends PostseasonSeriesSummary {
+  hostProgramId: string;
+  seeds: PostseasonTeamSeed[];
+}
+
+export interface LeaguePostseasonSummary {
+  currentStage: PostseasonWeekStage;
+  currentWeekLabel: string;
+  selectedTeamIds: string[];
+  nationalSeeds: PostseasonTeamSeed[];
+  regionals: PostseasonRegionalSummary[];
+  superRegionals: PostseasonSeriesSummary[];
+  mcwsBrackets: PostseasonSeriesSummary[];
+  finals?: PostseasonSeriesSummary;
+  mcwsTeamIds: string[];
+  championProgramId?: string;
+  runnerUpProgramId?: string;
+}
+
+export interface SeasonPostseasonState {
+  currentWeek: number;
+  summary: LeaguePostseasonSummary;
+  results: GameResult[];
 }
 
 export type SeasonGameStatus = 'scheduled' | 'final';
@@ -518,6 +564,7 @@ export interface SeasonDatabase {
   completedDays: number[];
   lastSimulatedDayLabel?: string;
   games: SeasonGameRecord[];
+  postseason?: SeasonPostseasonState;
 }
 
 export interface ProgramBundle {
@@ -545,6 +592,16 @@ export interface FranchiseSettings {
   ratingDisplay: RatingDisplayMode;
 }
 
+export interface MailMessage {
+  id: string;
+  type: MailType;
+  subject: string;
+  body: string;
+  createdAt: string;
+  readAt?: string | null;
+  eventLogEntry: string;
+}
+
 export interface FranchiseSave {
   version: number;
   year: number;
@@ -563,6 +620,7 @@ export interface FranchiseSave {
   complianceReviews: ComplianceReview[];
   weeklyPlan: OffseasonWeek[];
   eventLog: string[];
+  mail: MailMessage[];
   recruitingPointsPerWeek: number;
   recruitingPointsRemaining: number;
   certifiedRosterIds: string[];

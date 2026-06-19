@@ -31,10 +31,12 @@ import {
 } from '../lib/playerDevelopment';
 import { clamp, createSeededRandom } from '../lib/random';
 import {
+  advanceLeaguePostseason,
   buildSeasonSnapshotFromDatabase,
   createSeasonDatabase,
   getNextScheduledDayNumber,
   getScheduledProgramGameForDay,
+  initializeLeaguePostseason,
   simulateGame,
   simulateLeagueSeasonSnapshot,
   simulateSeasonDay,
@@ -47,6 +49,8 @@ import type {
   LeagueCoachingStaffs,
   LeagueRosters,
   LeagueSeasonSnapshot,
+  MailMessage,
+  MailType,
   NILDeal,
   OffseasonWeek,
   Player,
@@ -64,7 +68,7 @@ import type {
 const STORAGE_KEY = 'college-baseball-franchise-sim-save';
 const STORAGE_DB_NAME = 'college-baseball-franchise-sim-db';
 const STORAGE_OBJECT_STORE = 'zustand-store';
-const RULES_VERSION = 18;
+const RULES_VERSION = 19;
 
 const memoryStorage = new Map<string, string>();
 
@@ -178,6 +182,90 @@ const recruitingActions: Record<RecruitingActionId, { cost: number; label: strin
   'nil-presentation': { cost: 4, label: 'NIL Pitch' },
   'playing-time-pitch': { cost: 3, label: 'PT Pitch' },
 };
+
+const MAX_LOG_ENTRIES = 120;
+
+function createMailId() {
+  return `mail-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function inferMailType(entry: string): MailType {
+  const normalized = entry.toLowerCase();
+  if (normalized.includes('clubhouse') || normalized.includes('morale') || normalized.includes('frustration')) return 'clubhouse';
+  if (normalized.includes('committed') || normalized.includes('recruit') || normalized.includes('scholarship')) return 'recruiting';
+  if (normalized.includes('transferred') || normalized.includes('portal')) return 'portal';
+  if (normalized.includes('staff') || normalized.includes('coach')) return 'staff';
+  if (normalized.includes('migrated') || normalized.includes('upgraded') || normalized.includes('updated') || normalized.includes('restarted')) return 'system';
+  return 'league';
+}
+
+function buildMailSubject(entry: string, type: MailType) {
+  if (entry.includes(':')) {
+    const [prefix, ...rest] = entry.split(':');
+    const suffix = rest.join(':').trim();
+    if (suffix) {
+      return `${prefix.trim()} update`;
+    }
+  }
+
+  const label = {
+    clubhouse: 'Clubhouse update',
+    recruiting: 'Recruiting update',
+    portal: 'Transfer portal update',
+    staff: 'Staff update',
+    league: 'League update',
+    system: 'System update',
+  } satisfies Record<MailType, string>;
+
+  return label[type];
+}
+
+function toMailMessage(entry: string, options?: { markRead?: boolean; createdAt?: string; type?: MailType; subject?: string }): MailMessage {
+  const type = options?.type ?? inferMailType(entry);
+  const createdAt = options?.createdAt ?? new Date().toISOString();
+  return {
+    id: createMailId(),
+    type,
+    subject: options?.subject ?? buildMailSubject(entry, type),
+    body: entry,
+    createdAt,
+    readAt: options?.markRead ? createdAt : null,
+    eventLogEntry: entry,
+  };
+}
+
+function prependEventLogEntries(eventLog: string[], entries: string[]) {
+  return [...entries, ...eventLog].slice(0, MAX_LOG_ENTRIES);
+}
+
+function prependMailEntries(
+  mail: MailMessage[] | undefined,
+  entries: string[],
+  options?: { markRead?: boolean; createdAt?: string; type?: MailType; subject?: string },
+) {
+  const existingMail = mail ?? [];
+  const nextMail = entries.map((entry) => toMailMessage(entry, options));
+  return [...nextMail, ...existingMail].slice(0, MAX_LOG_ENTRIES);
+}
+
+function logSaveEvent(save: FranchiseSave, entry: string, options?: { markRead?: boolean; createdAt?: string; type?: MailType; subject?: string }) {
+  save.eventLog = prependEventLogEntries(save.eventLog, [entry]);
+  save.mail = prependMailEntries(save.mail, [entry], options);
+}
+
+function logSaveEvents(save: FranchiseSave, entries: string[], options?: { markRead?: boolean; createdAt?: string; type?: MailType; subject?: string }) {
+  save.eventLog = prependEventLogEntries(save.eventLog, entries);
+  save.mail = prependMailEntries(save.mail, entries, options);
+}
+
+function buildMigratedMail(save: FranchiseSave) {
+  if (save.mail?.length) {
+    return save.mail.slice(0, MAX_LOG_ENTRIES);
+  }
+
+  const migratedAt = save.createdAt ?? new Date().toISOString();
+  return save.eventLog.slice(0, MAX_LOG_ENTRIES).map((entry) => toMailMessage(entry, { createdAt: migratedAt, markRead: true }));
+}
 
 function scholarshipBudgetPct(programId: string) {
   return Math.round((findProgram(programId)?.resources.scholarshipBudget ?? 11.7) * 100);
@@ -339,7 +427,7 @@ function resetRecruitingWeek(save: FranchiseSave) {
 
 export function buildSeasonSnapshot(save: FranchiseSave): LeagueSeasonSnapshot {
   if (save.season) {
-    return buildSeasonSnapshotFromDatabase(save.userProgramId, save.season);
+    return buildSeasonSnapshotFromDatabase(save.userProgramId, save.season, save.leagueRosters);
   }
   const weeksPlayed = Math.max(0, Math.min(14, save.currentWeek - 8));
   return simulateLeagueSeasonSnapshot(save.userProgramId, save.roster, weeksPlayed, save.leagueRosters);
@@ -348,7 +436,8 @@ export function buildSeasonSnapshot(save: FranchiseSave): LeagueSeasonSnapshot {
 function stripSaveForStorage(save: FranchiseSave): FranchiseSave {
   return {
     ...save,
-    eventLog: save.eventLog.slice(0, 120),
+    eventLog: save.eventLog.slice(0, MAX_LOG_ENTRIES),
+    mail: save.mail.slice(0, MAX_LOG_ENTRIES),
     recruits: save.recruits.map((recruit) => ({
       ...recruit,
       topSchools: recruit.topSchools?.slice(0, 3),
@@ -379,6 +468,14 @@ function setProgramRoster(save: FranchiseSave, programId: string, roster: Player
   if (programId === save.userProgramId) {
     save.roster = roster;
   }
+}
+
+function buildPostseasonRosterMap(save: FranchiseSave) {
+  const rosterMap = new Map<string, Player[]>();
+  for (const program of programs) {
+    rosterMap.set(program.id, structuredClone(getProgramRosterFromSave(save, program.id)));
+  }
+  return rosterMap;
 }
 
 function mapLeagueRosters(rosters: LeagueRosters, iteratee: (player: Player) => Player): LeagueRosters {
@@ -442,39 +539,44 @@ function normalizeSaveForRulesVersion(save: FranchiseSave): FranchiseSave {
     settings: {
       ratingDisplay: save.settings?.ratingDisplay ?? '100',
     },
+    mail: buildMigratedMail(save),
   };
 
   if (!isValidSeasonDatabase(nextSave.season)) {
     nextSave.season = createSeasonDatabase();
     nextSave.currentWeek = Math.max(8, nextSave.currentWeek);
     nextSave.phase = nextSave.openingDayReady ? 'opening-day' : nextSave.phase;
-    nextSave.eventLog = ['Season calendar migrated to the corrected 56-game league database.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'Season calendar migrated to the corrected 56-game league database.');
   }
 
   if (save.version < 11) {
     nextSave.recruits = createRecruitBoard(save.userProgramId, save.year);
-    nextSave.eventLog = ['Recruiting board has been expanded into a national freshman class.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'Recruiting board has been expanded into a national freshman class.');
   }
 
   if (save.version < 14 && nextSave.recruits.length < 1000) {
     nextSave.recruits = createRecruitBoard(save.userProgramId, nextSave.year);
-    nextSave.eventLog = ['League rosters and the recruit pool were upgraded for persistent national recruiting.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'League rosters and the recruit pool were upgraded for persistent national recruiting.');
   }
 
   if (save.version < 15) {
-    nextSave.eventLog = ['Coaching staffs, personality, leadership, and development systems were added league-wide.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'Coaching staffs, personality, leadership, and development systems were added league-wide.');
   }
 
   if (save.version < 16) {
-    nextSave.eventLog = ['Player ratings and generated names were rebalanced for a more realistic NCAA talent spread.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'Player ratings and generated names were rebalanced for a more realistic NCAA talent spread.');
   }
 
   if (save.version < 17) {
-    nextSave.eventLog = ['Transfer portal and coaching continuity logic were upgraded for offseason movement.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'Transfer portal and coaching continuity logic were upgraded for offseason movement.');
   }
 
   if (save.version < 18) {
-    nextSave.eventLog = ['Program strategy profiles were added to better track long-term roster identity.', ...nextSave.eventLog];
+    logSaveEvent(nextSave, 'Program strategy profiles were added to better track long-term roster identity.');
+  }
+
+  if (save.version < 19) {
+    logSaveEvent(nextSave, 'Mail center upgraded. New messages can now be read, tracked, and deleted.');
   }
 
   nextSave.complianceReviews = save.complianceReviews ?? [];
@@ -511,6 +613,7 @@ export function createInitialSave(programId: string): FranchiseSave {
   const program = findProgram(programId);
   const weeklyPlan = createOffseasonPlan();
   const eventLog = [`Took over ${program?.school ?? 'program'} with a mandate to win in Omaha.`];
+  const createdAt = new Date().toISOString();
   const season = createSeasonDatabase();
   const weekBudget = recruitingPointsPerWeek(programId);
   const leagueRosters = createLeagueRosters();
@@ -519,7 +622,7 @@ export function createInitialSave(programId: string): FranchiseSave {
   const save: FranchiseSave = {
     version: RULES_VERSION,
     year: 1,
-    createdAt: new Date().toISOString(),
+    createdAt,
     currentWeek: 1,
     phase: 'roster-audit',
     userProgramId: programId,
@@ -534,6 +637,7 @@ export function createInitialSave(programId: string): FranchiseSave {
     complianceReviews: [],
     weeklyPlan,
     eventLog,
+    mail: prependMailEntries([], eventLog, { createdAt, markRead: true }),
     recruitingPointsPerWeek: weekBudget,
     recruitingPointsRemaining: weekBudget,
     certifiedRosterIds: [],
@@ -832,14 +936,14 @@ function resolveRecruiting(save: FranchiseSave) {
 
     if (recruit.userOffer && userScore > topAiScore + recruit.signability * 0.35) {
       setProgramRoster(save, save.userProgramId, [...getProgramRosterFromSave(save, save.userProgramId), toSignedPlayer(save.userProgramId, recruit, index)]);
-      save.eventLog.unshift(`${recruit.name} committed after a strong NIL + scholarship package.`);
+      logSaveEvent(save, `${recruit.name} committed after a strong NIL + scholarship package.`);
       return { ...recruit, committedProgramId: save.userProgramId, interest: 100, userScore, topSchools };
     }
 
     if (topAiScore > userScore + 12 && save.currentWeek >= 3) {
       const aiProgram = findProgram(topAiId);
       if (recruit.targeted && aiProgram) {
-        save.eventLog.unshift(`${recruit.name} committed to ${aiProgram.school}.`);
+        logSaveEvent(save, `${recruit.name} committed to ${aiProgram.school}.`);
       }
       if (topAiId) {
         setProgramRoster(save, topAiId, [...getProgramRosterFromSave(save, topAiId), toSignedPlayer(topAiId, recruit, index)]);
@@ -878,7 +982,7 @@ function resolvePortal(save: FranchiseSave) {
         },
       };
       adds.push(incoming);
-      save.eventLog.unshift(`${entry.player.name} transferred in from ${findProgram(entry.originProgramId)?.school ?? 'another program'}.`);
+      logSaveEvent(save, `${entry.player.name} transferred in from ${findProgram(entry.originProgramId)?.school ?? 'another program'}.`);
       return {
         ...entry,
         destinationProgramId: save.userProgramId,
@@ -970,7 +1074,7 @@ function phaseForWeek(week: number): SeasonPhase {
 
 function certifyRoster(save: FranchiseSave) {
   if (save.roster.length > 34) {
-    save.eventLog.unshift(`Roster certification blocked: ${save.roster.length} players on hand and only 34 allowed.`);
+    logSaveEvent(save, `Roster certification blocked: ${save.roster.length} players on hand and only 34 allowed.`);
     return false;
   }
 
@@ -985,11 +1089,11 @@ function certifyRoster(save: FranchiseSave) {
   save.leagueRosters[save.userProgramId] = save.roster;
   save.openingDayReady = true;
   save.phase = 'opening-day';
-  save.eventLog.unshift('Roster certified at 34 or fewer. Opening Day prep is underway.');
+  logSaveEvent(save, 'Roster certified at 34 or fewer. Opening Day prep is underway.');
   return true;
 }
 
-function buildNextUserPreview(save: FranchiseSave) {
+export function buildNextUserPreview(save: FranchiseSave) {
   if (!save.openingDayReady || !save.season) {
     return null;
   }
@@ -1255,18 +1359,20 @@ function resolveClubhouseEvents(save: FranchiseSave, contextLabel: string) {
   save.leagueRosters = nextRosters;
   syncUserRoster(save);
   if (userMessages.length) {
-    save.eventLog.unshift(...userMessages.map((message) => `${contextLabel}: ${message}`));
+    logSaveEvents(save, userMessages.map((message) => `${contextLabel}: ${message}`));
   }
 }
 
 interface FranchiseState {
   save: FranchiseSave | null;
-  selectedTab: 'overview' | 'mail' | 'roster' | 'player' | 'recruiting' | 'portal' | 'nil' | 'calendar' | 'settings' | 'preview' | 'stats' | 'polls';
+  selectedTab: 'overview' | 'mail' | 'roster' | 'player' | 'recruiting' | 'portal' | 'nil' | 'calendar' | 'settings' | 'preview' | 'stats' | 'polls' | 'postseason';
   lastPreviewGame: ReturnType<typeof simulateGame> | null;
   createFranchise: (programId: string) => void;
   restartFranchise: () => void;
   wipeSave: () => void;
   setSelectedTab: (tab: FranchiseState['selectedTab']) => void;
+  markMailRead: (mailIds: string[]) => void;
+  deleteMail: (mailIds: string[]) => void;
   releasePlayer: (playerId: string) => void;
   toggleRecruitTarget: (recruitId: string) => void;
   applyRecruitingAction: (recruitId: string, actionId: RecruitingActionId) => void;
@@ -1285,6 +1391,11 @@ function seasonWeekFromLabel(label?: string | null) {
   if (!label) return null;
   const match = label.match(/Week (\d+)/i);
   return match ? Number(match[1]) : null;
+}
+
+function franchiseWeekForSeasonLabel(label?: string | null) {
+  const seasonWeek = seasonWeekFromLabel(label);
+  return seasonWeek === null ? 8 : 8 + seasonWeek;
 }
 
 function startNextSeason(save: FranchiseSave) {
@@ -1367,13 +1478,13 @@ function startNextSeason(save: FranchiseSave) {
     recruits: createRecruitBoard(save.userProgramId, nextYear),
     portalEntries: [...portalEntries, ...createPortalEntries(save.userProgramId, nextYear)].slice(0, 24),
   };
-  nextSave.eventLog.unshift(`Welcome to Year ${nextSave.year}! A new national freshman class has arrived and every roster has rolled forward.`);
+  logSaveEvent(nextSave, `Welcome to Year ${nextSave.year}! A new national freshman class has arrived and every roster has rolled forward.`);
   const userTransition = staffTransitions[save.userProgramId];
   if (userTransition) {
-    nextSave.eventLog.unshift(userTransition.summary);
+    logSaveEvent(nextSave, userTransition.summary);
   }
   if (portalEntries.length) {
-    nextSave.eventLog.unshift(`${portalEntries.length} players entered the transfer portal across the league after offseason change and roster pressure.`);
+    logSaveEvent(nextSave, `${portalEntries.length} players entered the transfer portal across the league after offseason change and roster pressure.`);
   }
   nextSave.seasonSnapshot = buildSeasonSnapshot(nextSave);
   return nextSave;
@@ -1387,19 +1498,76 @@ export function advanceFranchiseSave(save: FranchiseSave) {
   }
 
   if (nextSave.openingDayReady && nextSave.season) {
+    const finalizePostseasonView = () => {
+      nextSave.seasonSnapshot = buildSeasonSnapshot(nextSave);
+      return nextSave;
+    };
+
+    if (!nextSave.season.games.some((game) => game.status === 'scheduled')) {
+      if (!nextSave.season.postseason) {
+        const rankedTeams = buildSeasonSnapshot(nextSave).teamStats;
+        nextSave.season.postseason = initializeLeaguePostseason(rankedTeams);
+        nextSave.phase = 'postseason';
+        nextSave.currentWeek = nextSave.season.postseason.currentWeek;
+        logSaveEvent(nextSave, 'The 64-team NCAA Tournament field is set. Regionals are up next.');
+        return finalizePostseasonView();
+      }
+
+      if (nextSave.season.postseason.summary.currentStage !== 'complete') {
+        const previousStage = nextSave.season.postseason.summary.currentStage;
+        nextSave.season.postseason = advanceLeaguePostseason(
+          nextSave.season.postseason,
+          buildPostseasonRosterMap(nextSave),
+          `save-${nextSave.year}-postseason`,
+        );
+        nextSave.phase = nextSave.season.postseason.summary.currentStage === 'complete' ? 'season-complete' : 'postseason';
+        nextSave.currentWeek = nextSave.season.postseason.currentWeek;
+
+        const championId = nextSave.season.postseason.summary.championProgramId;
+        if (championId) {
+          logSaveEvent(nextSave, `${findProgram(championId)?.school ?? 'A program'} won the College World Series.`);
+        } else {
+          const label = nextSave.season.postseason.summary.currentWeekLabel;
+          logSaveEvent(
+            nextSave,
+            previousStage === 'selection'
+              ? 'Regional play wrapped up and the super regional matchups are set.'
+              : previousStage === 'regionals'
+                ? 'Super regionals are complete and the Men\'s College World Series field is locked.'
+                : previousStage === 'super-regionals'
+                  ? 'Omaha bracket play is complete and the MCWS Finals matchup is set.'
+                  : `${label} has been recorded.`,
+          );
+        }
+        return finalizePostseasonView();
+      }
+
+      nextSave.phase = 'season-complete';
+      logSaveEvent(nextSave, 'Season complete. The tournament bracket has been finalized.');
+      return finalizePostseasonView();
+    }
+
     nextSave.roster = recoverRosterFatigue(nextSave.roster);
     setProgramRoster(nextSave, nextSave.userProgramId, nextSave.roster);
     const simmedDay = simulateSeasonDay(nextSave.season, nextSave.userProgramId, nextSave.roster, nextSave.leagueRosters);
     if (!simmedDay) {
-      nextSave.phase = 'season-complete';
-      nextSave.eventLog.unshift('Season complete. The database has no remaining scheduled days.');
+      if (!nextSave.season.postseason) {
+        const rankedTeams = buildSeasonSnapshot(nextSave).teamStats;
+        nextSave.season.postseason = initializeLeaguePostseason(rankedTeams);
+        nextSave.phase = 'postseason';
+        nextSave.currentWeek = nextSave.season.postseason.currentWeek;
+        logSaveEvent(nextSave, 'The 64-team NCAA Tournament field is set. Regionals are up next.');
+      } else {
+        nextSave.phase = 'season-complete';
+        logSaveEvent(nextSave, 'Season complete. The database has no remaining scheduled days.');
+      }
       nextSave.seasonSnapshot = buildSeasonSnapshot(nextSave);
       return nextSave;
     }
 
     nextSave.season = simmedDay.season;
-    nextSave.phase = simmedDay.season.games.some((game) => game.status === 'scheduled') ? 'in-season' : 'season-complete';
-    nextSave.currentWeek = 8 + simmedDay.season.currentDayNumber - 1;
+    nextSave.phase = simmedDay.season.games.some((game) => game.status === 'scheduled') ? 'in-season' : 'postseason';
+    nextSave.currentWeek = franchiseWeekForSeasonLabel(simmedDay.season.lastSimulatedDayLabel);
     const userGame: GameResult | null = simmedDay.userGame;
     if (userGame) {
       nextSave.roster = applyUserGameFatigue(nextSave.roster, userGame.updatedFatigue);
@@ -1414,7 +1582,8 @@ export function advanceFranchiseSave(save: FranchiseSave) {
       const opponentId = userGame.homeProgramId === nextSave.userProgramId
         ? userGame.awayProgramId
         : userGame.homeProgramId;
-      nextSave.eventLog.unshift(
+      logSaveEvent(
+        nextSave,
         `${simmedDay.season.lastSimulatedDayLabel}: ${programs.find((program) => program.id === nextSave.userProgramId)?.school ?? 'Your club'} `
         + `${userRuns > oppRuns ? 'beat' : 'lost to'} ${findProgram(opponentId)?.school ?? 'its opponent'} ${userRuns}-${oppRuns}.`,
       );
@@ -1422,8 +1591,16 @@ export function advanceFranchiseSave(save: FranchiseSave) {
     } else {
       nextSave.roster = applyInSeasonProgressToRoster(nextSave.roster, getProgramStaffFromSave(nextSave, nextSave.userProgramId), 52);
       setProgramRoster(nextSave, nextSave.userProgramId, nextSave.roster);
-      nextSave.eventLog.unshift(`${simmedDay.season.lastSimulatedDayLabel}: league play advanced with no user game on the schedule.`);
+      logSaveEvent(nextSave, `${simmedDay.season.lastSimulatedDayLabel}: league play advanced with no user game on the schedule.`);
       resolveClubhouseEvents(nextSave, simmedDay.season.lastSimulatedDayLabel ?? 'Clubhouse update');
+    }
+
+    if (!nextSave.season.games.some((game) => game.status === 'scheduled') && !nextSave.season.postseason) {
+      const rankedTeams = buildSeasonSnapshot(nextSave).teamStats;
+      nextSave.season.postseason = initializeLeaguePostseason(rankedTeams);
+      nextSave.phase = 'postseason';
+      nextSave.currentWeek = nextSave.season.postseason.currentWeek;
+      logSaveEvent(nextSave, 'The regular season is complete. The NCAA Tournament field is set.');
     }
 
     nextSave.seasonSnapshot = buildSeasonSnapshot(nextSave);
@@ -1474,11 +1651,39 @@ export const useFranchiseStore = create<FranchiseState>()(
         });
       },
       setSelectedTab: (selectedTab) => set({ selectedTab }),
+      markMailRead: (mailIds) => set((state) => {
+        if (!state.save) return state;
+        const unreadIds = new Set(
+          mailIds.filter((mailId) => state.save!.mail.some((message) => message.id === mailId && !message.readAt)),
+        );
+        if (!unreadIds.size) return state;
+        const readAt = new Date().toISOString();
+        return {
+          save: {
+            ...state.save,
+            mail: state.save.mail.map((message) => (
+              unreadIds.has(message.id) ? { ...message, readAt } : message
+            )),
+          },
+        };
+      }),
+      deleteMail: (mailIds) => set((state) => {
+        if (!state.save) return state;
+        const deletedIds = new Set(mailIds);
+        if (!deletedIds.size) return state;
+        return {
+          save: {
+            ...state.save,
+            mail: state.save.mail.filter((message) => !deletedIds.has(message.id)),
+          },
+        };
+      }),
       releasePlayer: (playerId) => set((state) => {
         if (!state.save) return state;
         const player = state.save.roster.find((entry) => entry.id === playerId);
         if (!player) return state;
         const nextRoster = state.save.roster.filter((entry) => entry.id !== playerId);
+        const eventEntry = `Released ${player.name} to manage the 34-man cap.`;
         return {
           save: {
             ...state.save,
@@ -1488,7 +1693,8 @@ export const useFranchiseStore = create<FranchiseState>()(
               [state.save.userProgramId]: nextRoster,
             },
             certifiedRosterIds: state.save.certifiedRosterIds.filter((id) => id !== playerId),
-            eventLog: [`Released ${player.name} to manage the 34-man cap.`, ...state.save.eventLog],
+            eventLog: prependEventLogEntries(state.save.eventLog, [eventEntry]),
+            mail: prependMailEntries(state.save.mail, [eventEntry]),
             seasonSnapshot: buildSeasonSnapshot({
               ...state.save,
               roster: nextRoster,
@@ -1502,6 +1708,7 @@ export const useFranchiseStore = create<FranchiseState>()(
       }),
       toggleRecruitTarget: (recruitId) => set((state) => {
         if (!state.save) return state;
+        const eventEntry = `Updated recruiting board target status for ${recruitId}.`;
         return {
           save: {
             ...state.save,
@@ -1510,7 +1717,8 @@ export const useFranchiseStore = create<FranchiseState>()(
                 ? { ...recruit, targeted: !recruit.targeted }
                 : recruit,
             ),
-            eventLog: [`Updated recruiting board target status for ${recruitId}.`, ...state.save.eventLog],
+            eventLog: prependEventLogEntries(state.save.eventLog, [eventEntry]),
+            mail: prependMailEntries(state.save.mail, [eventEntry]),
           },
         };
       }),
@@ -1527,6 +1735,7 @@ export const useFranchiseStore = create<FranchiseState>()(
         }
 
         const interestGain = actionInterestDelta(state.save, recruit, actionId);
+        const eventEntry = `Spent ${action.cost} recruiting points on ${action.label} for ${recruit.name}.`;
         return {
           save: {
             ...state.save,
@@ -1544,7 +1753,8 @@ export const useFranchiseStore = create<FranchiseState>()(
                 }
                 : entry,
             ),
-            eventLog: [`Spent ${action.cost} recruiting points on ${action.label} for ${recruit.name}.`, ...state.save.eventLog],
+            eventLog: prependEventLogEntries(state.save.eventLog, [eventEntry]),
+            mail: prependMailEntries(state.save.mail, [eventEntry]),
           },
         };
       }),
@@ -1554,6 +1764,7 @@ export const useFranchiseStore = create<FranchiseState>()(
           scholarshipPct,
           availableScholarshipPct(state.save, { excludeRecruitId: recruitId }),
         );
+        const eventEntry = `Offered ${allowedScholarshipPct}% plus $${nilValue.toLocaleString()} NIL to recruit target ${recruitId}.`;
         return {
           save: {
             ...state.save,
@@ -1562,10 +1773,8 @@ export const useFranchiseStore = create<FranchiseState>()(
                 ? { ...recruit, userOffer: { scholarshipPct: allowedScholarshipPct, nilValue }, interest: clamp(recruit.interest + 8, 0, 100) }
                 : recruit,
             ),
-            eventLog: [
-              `Offered ${allowedScholarshipPct}% plus $${nilValue.toLocaleString()} NIL to recruit target ${recruitId}.`,
-              ...state.save.eventLog,
-            ],
+            eventLog: prependEventLogEntries(state.save.eventLog, [eventEntry]),
+            mail: prependMailEntries(state.save.mail, [eventEntry]),
           },
         };
       }),
@@ -1575,6 +1784,7 @@ export const useFranchiseStore = create<FranchiseState>()(
           scholarshipPct,
           availableScholarshipPct(state.save, { excludePortalId: entryId }),
         );
+        const eventEntry = `Sent a portal package worth ${allowedScholarshipPct}% plus $${nilValue.toLocaleString()}.`;
         return {
           save: {
             ...state.save,
@@ -1583,10 +1793,8 @@ export const useFranchiseStore = create<FranchiseState>()(
                 ? { ...entry, userOffer: { scholarshipPct: allowedScholarshipPct, nilValue }, interest: clamp(entry.interest + 6, 0, 100) }
                 : entry,
             ),
-            eventLog: [
-              `Sent a portal package worth ${allowedScholarshipPct}% plus $${nilValue.toLocaleString()}.`,
-              ...state.save.eventLog,
-            ],
+            eventLog: prependEventLogEntries(state.save.eventLog, [eventEntry]),
+            mail: prependMailEntries(state.save.mail, [eventEntry]),
           },
         };
       }),
@@ -1594,7 +1802,8 @@ export const useFranchiseStore = create<FranchiseState>()(
         save: {
           ...state.save,
           schoolSponsor: brand,
-          eventLog: [`Updated school sponsor assumptions to ${brand}.`, ...state.save.eventLog],
+          eventLog: prependEventLogEntries(state.save.eventLog, [`Updated school sponsor assumptions to ${brand}.`]),
+          mail: prependMailEntries(state.save.mail, [`Updated school sponsor assumptions to ${brand}.`], { type: 'system' }),
         },
       }) : state),
       setRatingDisplay: (mode) => set((state) => state.save ? ({
@@ -1604,7 +1813,8 @@ export const useFranchiseStore = create<FranchiseState>()(
             ...state.save.settings,
             ratingDisplay: mode,
           },
-          eventLog: [`Switched player ratings display to ${mode}.`, ...state.save.eventLog],
+          eventLog: prependEventLogEntries(state.save.eventLog, [`Switched player ratings display to ${mode}.`]),
+          mail: prependMailEntries(state.save.mail, [`Switched player ratings display to ${mode}.`], { type: 'system' }),
         },
       }) : state),
       certifyCurrentRoster: () => {
@@ -1629,8 +1839,9 @@ export const useFranchiseStore = create<FranchiseState>()(
           currentWeek: Math.max(8, state.save.currentWeek),
           phase: state.save.openingDayReady ? 'opening-day' : state.save.phase,
           season,
-          seasonSnapshot: buildSeasonSnapshotFromDatabase(state.save.userProgramId, season),
-          eventLog: ['Restarted the season calendar and cleared all played games.', ...state.save.eventLog],
+          seasonSnapshot: buildSeasonSnapshotFromDatabase(state.save.userProgramId, season, state.save.leagueRosters),
+          eventLog: prependEventLogEntries(state.save.eventLog, ['Restarted the season calendar and cleared all played games.']),
+          mail: prependMailEntries(state.save.mail, ['Restarted the season calendar and cleared all played games.'], { type: 'system' }),
         };
         resetRecruitingWeek(save);
         return {
@@ -1681,15 +1892,14 @@ export const useFranchiseStore = create<FranchiseState>()(
           : result.homeSummary.runsByInning.reduce((sum: number, runs: number) => sum + runs, 0);
         const opponentId = result.homeProgramId === nextSave.userProgramId ? result.awayProgramId : result.homeProgramId;
         resolveClubhouseEvents(nextSave, nextUserGame.dayLabel);
+        const eventEntry = `${nextUserGame.dayLabel}: ${programs.find((program) => program.id === nextSave.userProgramId)?.school ?? 'Your club'} `
+          + `${userRuns > oppRuns ? 'beat' : 'lost to'} ${findProgram(opponentId)?.school ?? 'its opponent'} ${userRuns}-${oppRuns}.`;
 
         return {
           save: {
             ...nextSave,
-            eventLog: [
-              `${nextUserGame.dayLabel}: ${programs.find((program) => program.id === nextSave.userProgramId)?.school ?? 'Your club'} `
-              + `${userRuns > oppRuns ? 'beat' : 'lost to'} ${findProgram(opponentId)?.school ?? 'its opponent'} ${userRuns}-${oppRuns}.`,
-              ...nextSave.eventLog,
-            ],
+            eventLog: prependEventLogEntries(nextSave.eventLog, [eventEntry]),
+            mail: prependMailEntries(nextSave.mail, [eventEntry]),
           },
           lastPreviewGame: result,
           selectedTab: 'preview',
@@ -1708,19 +1918,26 @@ export const useFranchiseStore = create<FranchiseState>()(
         if (!state.save) return state;
         let nextSave = state.save;
 
-        if (nextSave.openingDayReady && nextSave.season) {
+        if (nextSave.phase === 'postseason') {
+          nextSave = advanceFranchiseSave(nextSave);
+        } else if (nextSave.openingDayReady && nextSave.season) {
           const startingWeek = seasonWeekFromLabel(
             nextSave.season.lastSimulatedDayLabel
               ?? nextSave.season.games.find((game) => game.status === 'scheduled')?.dayLabel
               ?? null,
           );
+          const startingPhase = nextSave.phase;
 
           for (let index = 0; index < 7; index += 1) {
             const advancedSave = advanceFranchiseSave(nextSave);
             if (advancedSave === nextSave) break;
             nextSave = advancedSave;
 
-            if (!nextSave.season || nextSave.phase === 'season-complete') {
+            if (!nextSave.season || nextSave.phase === 'season-complete' || nextSave.phase === 'postseason') {
+              break;
+            }
+
+            if (startingPhase === 'in-season' && nextSave.phase !== 'in-season') {
               break;
             }
 

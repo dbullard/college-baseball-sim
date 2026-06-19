@@ -4,6 +4,7 @@ import type {
   GameContext,
   GameResult,
   KeyMoment,
+  LeaguePostseasonSummary,
   LeagueSeasonSnapshot,
   LineupCard,
   PlayerBattingLine,
@@ -12,7 +13,11 @@ import type {
   PitcherUsageLine,
   PitchingPlan,
   Player,
+  PostseasonRegionalSummary,
+  PostseasonSeriesSummary,
+  PostseasonStage,
   SeasonOutlook,
+  SeasonPostseasonState,
   SeasonDatabase,
   SeasonGameRecord,
   TeamSeasonLine,
@@ -31,6 +36,7 @@ interface TeamStrengthProfile {
 
 interface ActivePitcherState {
   pitcher: Player;
+  isStarter: boolean;
   fatigue: number;
   battersFaced: number;
   usage: PitcherUsageLine;
@@ -46,6 +52,18 @@ interface PlateAppearanceResult {
   walk?: boolean;
   reachedOnError?: boolean;
   doublePlay?: boolean;
+}
+
+interface LeadChangeCandidate {
+  leadingTeam: 'home' | 'away';
+  winningPitcherId: string;
+  losingPitcherId: string;
+}
+
+interface PostseasonTeam {
+  programId: string;
+  nationalSeed: number;
+  regionalSeed?: number;
 }
 
 function average(values: number[]) {
@@ -79,14 +97,27 @@ function scorePitcher(player: Player) {
   return pitching.stuff * 0.3 + pitching.command * 0.22 + pitching.movement * 0.18 + pitching.stamina * 0.12 + pitching.composure * 0.1 + pitching.groundBall * 0.08;
 }
 
+function scoreAvailablePitcher(player: Player, fatigueWeight: number) {
+  return scorePitcher(player) - player.rosterStatus.fatigue * fatigueWeight;
+}
+
 export function buildLineupCard(roster: Player[], plan: PitchingPlan): LineupCard {
   const hitters = [...getHitters(roster)].sort((left, right) => scoreHitter(right) - scoreHitter(left));
   const pitchers = [...getPitchers(roster)].sort((left, right) => scorePitcher(right) - scorePitcher(left));
+  const rotationCandidates = pitchers.slice(0, 5);
+  const rotationIndex = new Map(rotationCandidates.map((pitcher, index) => [pitcher.id, index]));
 
   const battingOrder = hitters.slice(0, 9);
   const bench = hitters.slice(9, 14);
-  const starter = pitchers[Math.min(plan.rotationSlot, pitchers.length - 1)];
-  const bullpen = pitchers.filter((pitcher) => pitcher.id !== starter.id).slice(0, 6);
+  const starter = [...rotationCandidates].sort((left, right) => {
+    const leftSlotPenalty = Math.abs((rotationIndex.get(left.id) ?? 0) - plan.rotationSlot) * 7;
+    const rightSlotPenalty = Math.abs((rotationIndex.get(right.id) ?? 0) - plan.rotationSlot) * 7;
+    return scoreAvailablePitcher(right, 1.1) - rightSlotPenalty - (scoreAvailablePitcher(left, 1.1) - leftSlotPenalty);
+  })[0] ?? pitchers[Math.min(plan.rotationSlot, pitchers.length - 1)];
+  const bullpen = pitchers
+    .filter((pitcher) => pitcher.id !== starter.id)
+    .sort((left, right) => scoreAvailablePitcher(right, 1.35) - scoreAvailablePitcher(left, 1.35))
+    .slice(0, 8);
 
   return {
     battingOrder,
@@ -101,16 +132,25 @@ function createPitchingPlan(gameType: GameContext['gameType'], index: number): P
     return {
       gameType: 'midweek',
       rotationSlot: 3,
-      starterPitchLimit: 75,
-      bullpenAggression: 0.72,
+      starterPitchLimit: 54,
+      bullpenAggression: 0.8,
+    };
+  }
+
+  if (gameType === 'postseason') {
+    return {
+      gameType: 'postseason',
+      rotationSlot: (index % 3) as 0 | 1 | 2,
+      starterPitchLimit: index === 0 ? 98 : 90,
+      bullpenAggression: 0.94,
     };
   }
 
   return {
-    gameType: 'weekend',
+    gameType,
     rotationSlot: (index % 3) as 0 | 1 | 2,
-    starterPitchLimit: index === 0 ? 98 : 90,
-    bullpenAggression: 0.82,
+    starterPitchLimit: index === 0 ? 92 : 84,
+    bullpenAggression: 0.9,
   };
 }
 
@@ -131,9 +171,10 @@ function buildTeamStrength(lineup: LineupCard): TeamStrengthProfile {
   };
 }
 
-function createPitcherState(pitcher: Player): ActivePitcherState {
+function createPitcherState(pitcher: Player, isStarter = false): ActivePitcherState {
   return {
     pitcher,
+    isStarter,
     fatigue: pitcher.rosterStatus.fatigue,
     battersFaced: 0,
     usage: {
@@ -250,11 +291,22 @@ function shouldPullPitcher(
     return false;
   }
 
-  const staminaWear = state.battersFaced * 1.8 + state.fatigue * 0.6;
-  const threshold = ratings.stamina + plan.starterPitchLimit * 0.5;
-  const leverageBump = scoreMargin <= 2 && inning >= 6 ? 12 : 0;
-  const timesThroughPenalty = state.battersFaced >= 18 ? 12 : state.battersFaced >= 9 ? 4 : 0;
-  return staminaWear + leverageBump + timesThroughPenalty + random.int(0, 18) > threshold;
+  if (!state.isStarter) {
+    const reliefWear = state.battersFaced * 2 + state.fatigue * 0.55;
+    const leverageBump = scoreMargin <= 2 && inning >= 8 ? 4 : 0;
+    const runStress = state.usage.runsAllowed * 8;
+    const longOutingPenalty = state.usage.outsRecorded >= 6 ? 8 : 0;
+    const threshold = ratings.stamina * 0.75 + 24 + leverageBump;
+    return reliefWear + runStress + longOutingPenalty + random.int(0, 8) > threshold;
+  }
+
+  const staminaWear = state.battersFaced * 1.7 + state.fatigue * 0.48;
+  const threshold = ratings.stamina + plan.starterPitchLimit * 0.5 + (1 - plan.bullpenAggression) * 14;
+  const leverageBump = scoreMargin <= 3 && inning >= 5 ? 12 : 0;
+  const timesThroughPenalty = state.battersFaced >= 24 ? 28 : state.battersFaced >= 18 ? 16 : state.battersFaced >= 9 ? 6 : 0;
+  const runStress = state.usage.runsAllowed * 6.5;
+  const outingCapPenalty = Math.max(0, state.usage.outsRecorded - Math.round(plan.starterPitchLimit * 0.24)) * 2.2;
+  return staminaWear + leverageBump + timesThroughPenalty + runStress + outingCapPenalty + random.int(0, 8) > threshold;
 }
 
 function swapPitcher(
@@ -265,11 +317,14 @@ function swapPitcher(
   scoreMargin: number,
 ) {
   const sorted = [...bullpen].sort((left, right) => scorePitcher(right) - scorePitcher(left));
+  const unavailable = new Set([...usageLines.map((usage) => usage.pitcherId), current.pitcher.id]);
+  const available = sorted.filter((pitcher) => !unavailable.has(pitcher.id));
+  const pool = available.length > 0 ? available : sorted.filter((pitcher) => pitcher.id !== current.pitcher.id);
   const leveragePitcher =
-    inning >= 8 && scoreMargin <= 3 ? sorted[0] : inning >= 6 && scoreMargin <= 4 ? sorted[1] ?? sorted[0] : sorted[sorted.length - 1];
+    inning >= 8 && scoreMargin <= 3 ? pool[0] : inning >= 6 && scoreMargin <= 4 ? pool[1] ?? pool[0] : pool[pool.length - 1];
 
   usageLines.push(current.usage);
-  return createPitcherState(leveragePitcher);
+  return createPitcherState(leveragePitcher, false);
 }
 
 function applyBaserunning(
@@ -382,11 +437,11 @@ function consumePlateAppearance(
   const parkEffect = (context.parkFactor - 1) * 0.02;
   const postseasonTightness = context.postseasonStage !== 'regular-season' ? -0.004 : 0;
 
-  const walkChance = clamp(0.09 + disciplineEdge + commandVariance * 0.001 + fatiguePenalty * 0.5, 0.04, 0.16);
+  const walkChance = clamp(0.099 + disciplineEdge + commandVariance * 0.001 + fatiguePenalty * 0.5, 0.048, 0.175);
   const strikeoutChance = clamp(0.19 - avoidKEdge - fatiguePenalty * 0.5, 0.08, 0.35);
-  const homeRunChance = clamp(0.025 + powerEdge + parkEffect + fatiguePenalty * 0.2, 0.005, 0.08);
-  const errorChance = clamp(0.012 + (60 - defense.defense) * 0.00022 + (1 - fieldingSharpness) * 0.02, 0.004, 0.05);
-  const inPlayHitChance = clamp(0.19 + contactEdge + (offense.baserunning - defense.defense) * 0.0005 + sequencingBoost + postseasonTightness, 0.12, 0.28);
+  const homeRunChance = clamp(0.031 + powerEdge + parkEffect + fatiguePenalty * 0.24, 0.008, 0.088);
+  const errorChance = clamp(0.013 + (60 - defense.defense) * 0.00025 + (1 - fieldingSharpness) * 0.02, 0.005, 0.052);
+  const inPlayHitChance = clamp(0.212 + contactEdge + (offense.baserunning - defense.defense) * 0.0005 + sequencingBoost + postseasonTightness, 0.14, 0.302);
 
   const roll = random.next();
   pitcherState.battersFaced += 1;
@@ -627,6 +682,53 @@ function simulateHalfInning(
   return { runs, pitcher: workingPitcher };
 }
 
+function applyPitchingUsageToLines(lines: PlayerPitchingLine[], usageLines: PitcherUsageLine[]) {
+  const usageByPitcher = new Map(usageLines.map((usage) => [usage.pitcherId, usage]));
+  return lines.map((line) => {
+    const usage = usageByPitcher.get(line.playerId);
+    if (usage) {
+      line.outsRecorded = usage.outsRecorded;
+      line.runsAllowed = usage.runsAllowed;
+      line.earnedRuns = usage.runsAllowed;
+      line.walks = usage.walks;
+      line.strikeouts = usage.strikeouts;
+    }
+    return line;
+  });
+}
+
+function selectWinningPitcherLine(lines: PlayerPitchingLine[], candidateId: string) {
+  const candidate = lines.find((line) => line.playerId === candidateId) ?? lines[lines.length - 1];
+  if (!candidate) {
+    return null;
+  }
+  if (!candidate.gamesStarted || candidate.outsRecorded >= 15) {
+    return candidate;
+  }
+
+  const reliefOptions = lines
+    .filter((line) => line.playerId !== candidate.playerId && line.outsRecorded > 0)
+    .sort((left, right) =>
+      right.outsRecorded - left.outsRecorded
+      || left.runsAllowed - right.runsAllowed
+      || right.strikeouts - left.strikeouts,
+    );
+  return reliefOptions[0] ?? candidate;
+}
+
+function selectSavePitcherLine(lines: PlayerPitchingLine[], winningPitcherId: string, leadMargin: number) {
+  if (leadMargin > 3) {
+    const longSave = [...lines]
+      .filter((line) => line.playerId !== winningPitcherId && !line.gamesStarted && line.outsRecorded >= 9)
+      .sort((left, right) => right.outsRecorded - left.outsRecorded || left.runsAllowed - right.runsAllowed)[0];
+    return longSave ?? null;
+  }
+
+  return [...lines]
+    .filter((line) => line.playerId !== winningPitcherId && !line.gamesStarted && line.outsRecorded > 0)
+    .sort((left, right) => right.outsRecorded - left.outsRecorded || left.runsAllowed - right.runsAllowed)[0] ?? null;
+}
+
 export function simulateGame(
   context: GameContext,
   homeRoster: Player[],
@@ -642,12 +744,23 @@ export function simulateGame(
   const homeStrength = buildTeamStrength(homeLineup);
   const awayStrength = buildTeamStrength(awayLineup);
 
-  const runEnvironment = random.pick([0.78, 0.88, 0.96, 1, 1.08, 1.18, 1.3]);
-  const homeSequencing = centeredNoise(random, context.gameType === 'midweek' ? 0.075 : 0.052);
-  const awaySequencing = centeredNoise(random, context.gameType === 'midweek' ? 0.075 : 0.052);
+  const runEnvironment = context.gameType === 'postseason'
+    ? random.pick([0.94, 1, 1.04, 1.08, 1.12])
+    : context.gameType === 'midweek'
+      ? random.pick([0.8, 0.9, 0.98, 1.06, 1.16, 1.26, 1.38])
+      : random.pick([0.86, 0.96, 1.02, 1.08, 1.16, 1.24, 1.32]);
+  const sequencingSpread = context.gameType === 'midweek'
+    ? 0.078
+    : context.gameType === 'postseason'
+      ? 0.038
+      : 0.048;
+  const homeSequencing = centeredNoise(random, sequencingSpread);
+  const awaySequencing = centeredNoise(random, sequencingSpread);
   const homeFieldingSharpness = clamp(1 + centeredNoise(random, 0.08), 0.84, 1.14);
   const awayFieldingSharpness = clamp(1 + centeredNoise(random, 0.08), 0.84, 1.14);
-  const homeAdvantage = 0.012 + (findProgram(context.homeProgramId)?.prestige.overall ?? 70 - (findProgram(context.awayProgramId)?.prestige.overall ?? 70)) * 0.00008;
+  const homeAdvantage = context.neutralSite
+    ? 0
+    : 0.012 + (findProgram(context.homeProgramId)?.prestige.overall ?? 70 - (findProgram(context.awayProgramId)?.prestige.overall ?? 70)) * 0.00008;
 
   const homeSummary = createSummary();
   const awaySummary = createSummary();
@@ -661,17 +774,22 @@ export function simulateGame(
   const homeBattingIndex = { value: 0 };
   const awayBattingIndex = { value: 0 };
 
-  let homePitcher = createPitcherState(homeLineup.starter);
-  let awayPitcher = createPitcherState(awayLineup.starter);
+  let homePitcher = createPitcherState(homeLineup.starter, true);
+  let awayPitcher = createPitcherState(awayLineup.starter, true);
   getOrCreatePitchingLine(homePitchingMap, homeLineup.starter, true);
   getOrCreatePitchingLine(awayPitchingMap, awayLineup.starter, true);
   const homePitchingUsage: PitcherUsageLine[] = [];
   const awayPitchingUsage: PitcherUsageLine[] = [];
+  const leadChanges: LeadChangeCandidate[] = [];
   let homeRuns = 0;
   let awayRuns = 0;
 
   const maxInnings = 12;
   for (let inning = 1; inning <= maxInnings; inning += 1) {
+    const awayPitcherOfRecord = awayPitcher.pitcher.id;
+    const homePitcherFacingAway = homePitcher.pitcher.id;
+    const awayBeforeTop = awayRuns;
+    const homeBeforeTop = homeRuns;
     const topResult = simulateHalfInning(
       awayLineup,
       homeLineup,
@@ -698,6 +816,13 @@ export function simulateGame(
     awayRuns += topResult.runs;
     awaySummary.runsByInning.push(topResult.runs);
     homePitcher = topResult.pitcher;
+    if (awayRuns > homeRuns && awayBeforeTop <= homeBeforeTop) {
+      leadChanges.push({
+        leadingTeam: 'away',
+        winningPitcherId: awayPitcherOfRecord,
+        losingPitcherId: homePitcherFacingAway,
+      });
+    }
 
     if (inning >= 9 && inning === maxInnings && awayRuns !== homeRuns) {
       break;
@@ -709,6 +834,10 @@ export function simulateGame(
       continue;
     }
 
+    const homePitcherOfRecord = homePitcher.pitcher.id;
+    const awayPitcherFacingHome = awayPitcher.pitcher.id;
+    const homeBeforeBottom = homeRuns;
+    const awayBeforeBottom = awayRuns;
     const bottomResult = simulateHalfInning(
       homeLineup,
       awayLineup,
@@ -735,6 +864,13 @@ export function simulateGame(
     homeRuns += bottomResult.runs;
     homeSummary.runsByInning.push(bottomResult.runs);
     awayPitcher = bottomResult.pitcher;
+    if (homeRuns > awayRuns && homeBeforeBottom <= awayBeforeBottom) {
+      leadChanges.push({
+        leadingTeam: 'home',
+        winningPitcherId: homePitcherOfRecord,
+        losingPitcherId: awayPitcherFacingHome,
+      });
+    }
 
     if (inning >= 9 && homeRuns !== awayRuns) {
       break;
@@ -747,39 +883,28 @@ export function simulateGame(
   getOrCreatePitchingLine(awayPitchingMap, awayPitcher.pitcher);
 
   const winnerIsHome = homeRuns > awayRuns;
-  const homePitchingLines = [...homePitchingMap.values()].map((line) => {
-    const usage = [...homePitchingUsage, homePitcher.usage].find((entry) => entry.pitcherId === line.playerId);
-    if (usage) {
-      line.outsRecorded = usage.outsRecorded;
-      line.runsAllowed = usage.runsAllowed;
-      line.earnedRuns = usage.runsAllowed;
-      line.walks = usage.walks;
-      line.strikeouts = usage.strikeouts;
-    }
-    return line;
-  });
-  const awayPitchingLines = [...awayPitchingMap.values()].map((line) => {
-    const usage = [...awayPitchingUsage, awayPitcher.usage].find((entry) => entry.pitcherId === line.playerId);
-    if (usage) {
-      line.outsRecorded = usage.outsRecorded;
-      line.runsAllowed = usage.runsAllowed;
-      line.earnedRuns = usage.runsAllowed;
-      line.walks = usage.walks;
-      line.strikeouts = usage.strikeouts;
-    }
-    return line;
-  });
-
-  const winningPitcherLine = winnerIsHome
-    ? homePitchingLines[homePitchingLines.length - 1]
-    : awayPitchingLines[awayPitchingLines.length - 1];
-  const losingPitcherLine = winnerIsHome
-    ? awayPitchingLines[awayPitchingLines.length - 1]
-    : homePitchingLines[homePitchingLines.length - 1];
+  const homePitchingLines = applyPitchingUsageToLines([...homePitchingMap.values()], homePitchingUsage);
+  const awayPitchingLines = applyPitchingUsageToLines([...awayPitchingMap.values()], awayPitchingUsage);
+  const winningLeadChange = [...leadChanges].reverse().find((entry) => entry.leadingTeam === (winnerIsHome ? 'home' : 'away'));
+  const defaultWinningPitcherId = winnerIsHome ? homeLineup.starter.id : awayLineup.starter.id;
+  const defaultLosingPitcherId = winnerIsHome ? awayLineup.starter.id : homeLineup.starter.id;
+  const winningPitcherLine = selectWinningPitcherLine(
+    winnerIsHome ? homePitchingLines : awayPitchingLines,
+    winningLeadChange?.winningPitcherId ?? defaultWinningPitcherId,
+  ) ?? (winnerIsHome ? homePitchingLines[0] : awayPitchingLines[0]);
+  const losingPitcherLine = (winnerIsHome ? awayPitchingLines : homePitchingLines)
+    .find((line) => line.playerId === (winningLeadChange?.losingPitcherId ?? defaultLosingPitcherId))
+    ?? (winnerIsHome ? awayPitchingLines[0] : homePitchingLines[0]);
   winningPitcherLine.wins += 1;
   losingPitcherLine.losses += 1;
-  if (context.gameType !== 'midweek') {
-    winningPitcherLine.saves += winningPitcherLine.gamesStarted ? 0 : 1;
+
+  const savePitcherLine = selectSavePitcherLine(
+    winnerIsHome ? homePitchingLines : awayPitchingLines,
+    winningPitcherLine.playerId,
+    Math.abs(homeRuns - awayRuns),
+  );
+  if (savePitcherLine) {
+    savePitcherLine.saves += 1;
   }
 
   return {
@@ -827,20 +952,91 @@ function compareGameContexts(left: GameContext, right: GameContext) {
   return left.homeProgramId.localeCompare(right.homeProgramId) || left.awayProgramId.localeCompare(right.awayProgramId);
 }
 
+function cloneRoster(roster: Player[]) {
+  return roster.map((player) => ({
+    ...player,
+    rosterStatus: {
+      ...player.rosterStatus,
+    },
+  }));
+}
+
+function recoverRosterForNextDay(roster: Player[]) {
+  return roster.map((player) => ({
+    ...player,
+    rosterStatus: {
+      ...player.rosterStatus,
+      fatigue: Math.max(0, player.rosterStatus.fatigue - (player.pitching ? 9 : 4)),
+    },
+  }));
+}
+
+function applyGameFatigueToRoster(roster: Player[], updatedFatigue: Record<string, number>) {
+  return roster.map((player) => ({
+    ...player,
+    rosterStatus: {
+      ...player.rosterStatus,
+      fatigue: clamp(player.rosterStatus.fatigue + (updatedFatigue[player.id] ?? 0), 0, 100),
+    },
+  }));
+}
+
+function recoverLeagueRostersForNextDay(rosterMap: Map<string, Player[]>) {
+  for (const [programId, roster] of rosterMap.entries()) {
+    rosterMap.set(programId, recoverRosterForNextDay(roster));
+  }
+}
+
+function simulateScheduledGameWithFatigue(
+  context: GameContext,
+  rosterMap: Map<string, Player[]>,
+  seed: string,
+) {
+  const homeRoster = rosterMap.get(context.homeProgramId)!;
+  const awayRoster = rosterMap.get(context.awayProgramId)!;
+  const result = simulateGame(context, homeRoster, awayRoster, seed);
+
+  rosterMap.set(context.homeProgramId, applyGameFatigueToRoster(homeRoster, result.updatedFatigue));
+  rosterMap.set(context.awayProgramId, applyGameFatigueToRoster(awayRoster, result.updatedFatigue));
+
+  return result;
+}
+
 function gameRecordId(context: GameContext) {
   return `${context.dateLabel}-${context.homeProgramId}-${context.awayProgramId}-${context.seriesGameNumber}`;
 }
 
-function rotatePairings(entries: typeof programs, offset: number) {
-  const ordered = entries.map((program) => program.id);
-  const rotated = ordered.slice(offset % ordered.length).concat(ordered.slice(0, offset % ordered.length));
-  const pairings: Array<[string, string]> = [];
+const OPENING_NON_CONFERENCE_WEEKS = 4;
+const CONFERENCE_START_WEEK = 5;
+const TOTAL_REGULAR_SEASON_WEEKS = 14;
+const FINAL_MIDWEEK_WEEK = 10;
+const MIN_REGULAR_SEASON_GAMES = 52;
+const MAX_REGULAR_SEASON_GAMES = 56;
+const WEEKEND_DAYS = ['Friday', 'Saturday', 'Sunday'] as const;
 
-  for (let index = 0; index < Math.floor(rotated.length / 2); index += 1) {
-    pairings.push([rotated[index], rotated[rotated.length - 1 - index]]);
+function normalizeConferenceName(conference: string) {
+  switch (conference) {
+    case 'ACC':
+      return 'Atlantic Coast';
+    case 'SEC':
+      return 'Southeastern';
+    case 'AAC':
+      return 'American';
+    case 'CUSA':
+      return 'Conference USA';
+    case 'MVC':
+      return 'Missouri Valley';
+    default:
+      return conference;
   }
+}
 
-  return pairings;
+function conferenceKeyForProgram(programId: string) {
+  return normalizeConferenceName(findProgram(programId)?.conference ?? 'Independent');
+}
+
+function areConferenceOpponents(leftId: string, rightId: string) {
+  return conferenceKeyForProgram(leftId) === conferenceKeyForProgram(rightId);
 }
 
 function homeAwayForPair(leftId: string, rightId: string, week: number, game: number) {
@@ -853,111 +1049,325 @@ function homeAwayForPair(leftId: string, rightId: string, week: number, game: nu
   };
 }
 
-function addDeficitShowcaseGames(games: GameContext[]) {
-  const gameCounts = new Map(programs.map((program) => [program.id, 0]));
-  const occupiedDates = new Map(programs.map((program) => [program.id, new Set<string>()]));
+function buildPreferredPairings(
+  entries: typeof programs,
+  offset: number,
+  preferredOpponent: (leftId: string, rightId: string) => boolean,
+  allowFallback = true,
+) {
+  const ordered = entries.map((program) => program.id);
+  const rotated = ordered.slice(offset % ordered.length).concat(ordered.slice(0, offset % ordered.length));
+  const available = [...rotated];
+  const pairings: Array<[string, string]> = [];
+  const deferred: string[] = [];
 
-  for (const game of games) {
-    gameCounts.set(game.homeProgramId, (gameCounts.get(game.homeProgramId) ?? 0) + 1);
-    gameCounts.set(game.awayProgramId, (gameCounts.get(game.awayProgramId) ?? 0) + 1);
-    occupiedDates.get(game.homeProgramId)?.add(game.dateLabel);
-    occupiedDates.get(game.awayProgramId)?.add(game.dateLabel);
+  while (available.length >= 2) {
+    const leftId = available.shift()!;
+    let rightIndex = available.findIndex((rightId) => preferredOpponent(leftId, rightId));
+    if (rightIndex < 0) {
+      if (!allowFallback) {
+        deferred.push(leftId);
+        continue;
+      }
+      rightIndex = available.length - 1;
+    }
+    const [rightId] = available.splice(rightIndex, 1);
+    pairings.push([leftId, rightId]);
   }
 
-  let guard = 0;
-  while ([...gameCounts.values()].some((count) => count < 56) && guard < 400) {
-    guard += 1;
-    const week = ((guard - 1) % 14) + 1;
-    const dateLabel = `Week ${week} Wednesday`;
-    const candidates = programs
-      .filter((program) => (gameCounts.get(program.id) ?? 0) < 56 && !occupiedDates.get(program.id)?.has(dateLabel))
-      .sort((left, right) =>
-        (gameCounts.get(left.id) ?? 0) - (gameCounts.get(right.id) ?? 0)
-        || right.prestige.overall - left.prestige.overall,
+  if (!allowFallback) {
+    const leftovers = available.concat(deferred);
+    for (let leftIndex = 0; leftIndex < leftovers.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < leftovers.length; rightIndex += 1) {
+        const leftId = leftovers[leftIndex]!;
+        const rightId = leftovers[rightIndex]!;
+        if (!preferredOpponent(leftId, rightId)) continue;
+        pairings.push([leftId, rightId]);
+        leftovers.splice(rightIndex, 1);
+        leftovers.splice(leftIndex, 1);
+        leftIndex -= 1;
+        break;
+      }
+    }
+  }
+
+  return pairings;
+}
+
+function createGameCountMap(games: GameContext[]) {
+  const counts = new Map(programs.map((program) => [program.id, 0]));
+  for (const game of games) {
+    counts.set(game.homeProgramId, (counts.get(game.homeProgramId) ?? 0) + 1);
+    counts.set(game.awayProgramId, (counts.get(game.awayProgramId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function createOccupiedDateMap(games: GameContext[]) {
+  const occupied = new Map(programs.map((program) => [program.id, new Set<string>()]));
+  for (const game of games) {
+    occupied.get(game.homeProgramId)?.add(game.dateLabel);
+    occupied.get(game.awayProgramId)?.add(game.dateLabel);
+  }
+  return occupied;
+}
+
+function compareScoreTuples(left: number[], right: number[]) {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    if ((left[index] ?? 0) !== (right[index] ?? 0)) {
+      return (left[index] ?? 0) - (right[index] ?? 0);
+    }
+  }
+  return 0;
+}
+
+function pushMidweekGame(games: GameContext[], week: number, leftId: string, rightId: string, day: 'Tuesday' | 'Wednesday', weatherNote: string) {
+  const { homeProgramId, awayProgramId } = homeAwayForPair(leftId, rightId, week - 1, day === 'Tuesday' ? 0 : 4);
+  const homeProgram = findProgram(homeProgramId)!;
+  games.push({
+    dateLabel: `Week ${week} ${day}`,
+    homeProgramId,
+    awayProgramId,
+    seriesGameNumber: 1,
+    gameType: 'midweek',
+    parkFactor: homeProgram.parkFactor,
+    weatherNote,
+    homeTravelDays: 0,
+    awayTravelDays: 1,
+    postseasonStage: 'regular-season',
+  });
+}
+
+function pushWeekendSeries(games: GameContext[], week: number, leftId: string, rightId: string, weatherNotePrefix: string) {
+  for (let game = 0; game < 3; game += 1) {
+    const { homeProgramId, awayProgramId } = homeAwayForPair(leftId, rightId, week - 1, game + 1);
+    const homeProgram = findProgram(homeProgramId)!;
+    games.push({
+      dateLabel: `Week ${week} ${WEEKEND_DAYS[game]}`,
+      homeProgramId,
+      awayProgramId,
+      seriesGameNumber: game + 1,
+      gameType: 'weekend',
+      parkFactor: homeProgram.parkFactor,
+      weatherNote: game === 0 ? `${weatherNotePrefix} opener` : game === 1 ? `${weatherNotePrefix} middle game` : `${weatherNotePrefix} finale`,
+      homeTravelDays: 0,
+      awayTravelDays: game === 0 ? 1 : 0,
+      postseasonStage: 'regular-season',
+    });
+  }
+}
+
+type ProgramEntry = (typeof programs)[number];
+
+function programsByConferenceKey() {
+  const groups = new Map<string, ProgramEntry[]>();
+  for (const program of programs) {
+    const key = normalizeConferenceName(program.conference);
+    const bucket = groups.get(key) ?? [];
+    bucket.push(program);
+    groups.set(key, bucket);
+  }
+  return groups;
+}
+
+function buildConferenceRoundPairings(entries: ProgramEntry[], roundIndex: number) {
+  const ids = [...entries].sort((left, right) => right.prestige.overall - left.prestige.overall).map((program) => program.id);
+  const slots: Array<string | null> = ids.length % 2 === 0 ? [...ids] : [...ids, null];
+  const rounds = Math.max(1, slots.length - 1);
+
+  for (let round = 0; round < roundIndex % rounds; round += 1) {
+    const fixed = slots[0];
+    const rotating = slots.slice(1);
+    rotating.unshift(rotating.pop() ?? null);
+    slots.splice(0, slots.length, fixed, ...rotating);
+  }
+
+  const pairings: Array<[string, string]> = [];
+  const byes: string[] = [];
+
+  for (let index = 0; index < slots.length / 2; index += 1) {
+    const leftId = slots[index];
+    const rightId = slots[slots.length - 1 - index];
+    if (leftId && rightId) {
+      pairings.push([leftId, rightId]);
+    } else if (leftId || rightId) {
+      byes.push((leftId ?? rightId)!);
+    }
+  }
+
+  return { pairings, byes };
+}
+
+function buildNonConferenceWeekends(games: GameContext[], startWeek: number, endWeek: number) {
+  const prestigeOrder = [...programs].sort((left, right) => right.prestige.overall - left.prestige.overall);
+  for (let week = startWeek; week <= endWeek; week += 1) {
+    const pairings = buildPreferredPairings(
+      prestigeOrder,
+      week * 5 + 1,
+      (leftId, rightId) => !areConferenceOpponents(leftId, rightId),
+      false,
+    );
+
+    for (const [leftId, rightId] of pairings) {
+      pushWeekendSeries(games, week, leftId, rightId, 'Non-conference weekend');
+    }
+  }
+}
+
+function buildConferenceWeekendSeries(games: GameContext[], startWeek: number, endWeek: number) {
+  const conferenceGroups = programsByConferenceKey();
+  for (let week = startWeek; week <= endWeek; week += 1) {
+    const leftovers: ProgramEntry[] = [];
+
+    for (const conferencePrograms of conferenceGroups.values()) {
+      if (conferencePrograms.length < 2) {
+        leftovers.push(...conferencePrograms);
+        continue;
+      }
+
+      const { pairings, byes } = buildConferenceRoundPairings(conferencePrograms, week - startWeek);
+      for (const [leftId, rightId] of pairings) {
+        pushWeekendSeries(games, week, leftId, rightId, 'Conference weekend');
+      }
+      leftovers.push(...byes.map((programId) => findProgram(programId)!).filter(Boolean));
+    }
+
+    if (leftovers.length >= 2) {
+      const latePairings = buildPreferredPairings(
+        leftovers as typeof programs,
+        week * 7,
+        (leftId, rightId) => !areConferenceOpponents(leftId, rightId),
       );
 
-    while (candidates.length >= 2) {
-      const left = candidates.shift()!;
-      const rightIndex = candidates.findIndex((program) => program.region === left.region);
-      const right = rightIndex >= 0 ? candidates.splice(rightIndex, 1)[0] : candidates.pop()!;
-      const { homeProgramId, awayProgramId } = homeAwayForPair(left.id, right.id, week - 1, 4);
-      const homeProgram = findProgram(homeProgramId)!;
+      for (const [leftId, rightId] of latePairings) {
+        pushWeekendSeries(games, week, leftId, rightId, 'Late non-conference weekend');
+      }
+    }
+  }
+}
 
-      games.push({
-        dateLabel,
-        homeProgramId,
-        awayProgramId,
-        seriesGameNumber: 1,
-        gameType: 'midweek',
-        parkFactor: homeProgram.parkFactor,
-        weatherNote: 'Regional midweek showcase',
-        homeTravelDays: 0,
-        awayTravelDays: 1,
-        postseasonStage: 'regular-season',
-      });
-      gameCounts.set(homeProgramId, (gameCounts.get(homeProgramId) ?? 0) + 1);
-      gameCounts.set(awayProgramId, (gameCounts.get(awayProgramId) ?? 0) + 1);
-      occupiedDates.get(homeProgramId)?.add(dateLabel);
-      occupiedDates.get(awayProgramId)?.add(dateLabel);
+function scoreMidweekOpponent(programId: string, opponentId: string, scheduledGames: Map<string, number>) {
+  const program = findProgram(programId)!;
+  const opponent = findProgram(opponentId)!;
+
+  return [
+    program.location.state === opponent.location.state ? 0 : 1,
+    program.region === opponent.region ? 0 : 1,
+    Math.abs((scheduledGames.get(programId) ?? 0) - (scheduledGames.get(opponentId) ?? 0)),
+    opponent.conferenceTier,
+    Math.abs(program.prestige.overall - opponent.prestige.overall),
+  ];
+}
+
+function chooseBestMidweekOpponent(programId: string, candidates: ProgramEntry[], scheduledGames: Map<string, number>) {
+  return [...candidates]
+    .filter((candidate) => !areConferenceOpponents(programId, candidate.id))
+    .sort((left, right) =>
+      compareScoreTuples(
+        scoreMidweekOpponent(programId, left.id, scheduledGames),
+        scoreMidweekOpponent(programId, right.id, scheduledGames),
+      ) || left.id.localeCompare(right.id))
+    [0] ?? null;
+}
+
+function updateMapsForScheduledGame(
+  scheduledGames: Map<string, number>,
+  occupiedDates: Map<string, Set<string>>,
+  dateLabel: string,
+  homeProgramId: string,
+  awayProgramId: string,
+) {
+  scheduledGames.set(homeProgramId, (scheduledGames.get(homeProgramId) ?? 0) + 1);
+  scheduledGames.set(awayProgramId, (scheduledGames.get(awayProgramId) ?? 0) + 1);
+  occupiedDates.get(homeProgramId)?.add(dateLabel);
+  occupiedDates.get(awayProgramId)?.add(dateLabel);
+}
+
+function fillRegionalMidweeks(games: GameContext[], startWeek: number, endWeek: number) {
+  const scheduledGames = createGameCountMap(games);
+  const occupiedDates = createOccupiedDateMap(games);
+
+  for (let week = startWeek; week <= Math.min(FINAL_MIDWEEK_WEEK, endWeek); week += 1) {
+    const day = week < CONFERENCE_START_WEEK ? 'Wednesday' : 'Tuesday';
+    const dateLabel = `Week ${week} ${day}`;
+    const candidates = [...programs]
+      .filter((program) =>
+        (scheduledGames.get(program.id) ?? 0) < MIN_REGULAR_SEASON_GAMES
+        && !occupiedDates.get(program.id)?.has(dateLabel))
+      .sort((left, right) =>
+        (scheduledGames.get(left.id) ?? 0) - (scheduledGames.get(right.id) ?? 0)
+        || right.prestige.overall - left.prestige.overall);
+
+    while (candidates.length >= 2) {
+      const program = candidates.shift()!;
+      const opponent = chooseBestMidweekOpponent(program.id, candidates, scheduledGames);
+      if (!opponent) continue;
+
+      pushMidweekGame(
+        games,
+        week,
+        program.id,
+        opponent.id,
+        day,
+        week < CONFERENCE_START_WEEK ? 'Early-season regional tune-up' : 'Regional midweek matchup',
+      );
+      const opponentIndex = candidates.findIndex((candidate) => candidate.id === opponent.id);
+      if (opponentIndex >= 0) {
+        candidates.splice(opponentIndex, 1);
+      }
+      updateMapsForScheduledGame(scheduledGames, occupiedDates, dateLabel, program.id, opponent.id);
+    }
+  }
+
+  for (let week = FINAL_MIDWEEK_WEEK + 1; week <= endWeek; week += 1) {
+    const dateLabel = `Week ${week} Tuesday`;
+    const candidates = [...programs]
+      .filter((program) =>
+        (scheduledGames.get(program.id) ?? 0) < MAX_REGULAR_SEASON_GAMES
+        && !occupiedDates.get(program.id)?.has(dateLabel))
+      .sort((left, right) =>
+        (scheduledGames.get(left.id) ?? 0) - (scheduledGames.get(right.id) ?? 0)
+        || right.prestige.overall - left.prestige.overall);
+
+    while (candidates.length >= 2) {
+      const activeIndex = candidates.findIndex((program) => (scheduledGames.get(program.id) ?? 0) < MIN_REGULAR_SEASON_GAMES);
+      if (activeIndex < 0) {
+        break;
+      }
+      const [program] = candidates.splice(activeIndex, 1);
+      const opponent = chooseBestMidweekOpponent(program.id, candidates, scheduledGames);
+      if (!opponent) continue;
+
+      pushMidweekGame(games, week, program.id, opponent.id, 'Tuesday', 'Late-season regional makeup');
+      const opponentIndex = candidates.findIndex((candidate) => candidate.id === opponent.id);
+      if (opponentIndex >= 0) {
+        candidates.splice(opponentIndex, 1);
+      }
+      updateMapsForScheduledGame(scheduledGames, occupiedDates, dateLabel, program.id, opponent.id);
     }
   }
 }
 
 function createLeagueSchedule() {
   const games: GameContext[] = [];
-  const prestigeOrder = [...programs].sort((left, right) => right.prestige.overall - left.prestige.overall);
 
-  for (let week = 0; week < 14; week += 1) {
-    const midweekPairings = rotatePairings(prestigeOrder, week * 3);
-    for (const [leftId, rightId] of midweekPairings) {
-      const { homeProgramId, awayProgramId } = homeAwayForPair(leftId, rightId, week, 0);
-      const homeProgram = findProgram(homeProgramId)!;
-      games.push({
-        dateLabel: `Week ${week + 1} Tuesday`,
-        homeProgramId,
-        awayProgramId,
-        seriesGameNumber: 1,
-        gameType: 'midweek',
-        parkFactor: homeProgram.parkFactor,
-        weatherNote: week < 4 ? 'Early-season non-conference test' : 'Midweek staff game',
-        homeTravelDays: 0,
-        awayTravelDays: 1,
-        postseasonStage: 'regular-season',
-      });
-    }
-
-    const weekendPairings = rotatePairings(prestigeOrder, week * 5 + 1);
-
-    for (const [leftId, rightId] of weekendPairings) {
-      for (let game = 0; game < 3; game += 1) {
-        const { homeProgramId, awayProgramId } = homeAwayForPair(leftId, rightId, week, game + 1);
-        const homeProgram = findProgram(homeProgramId)!;
-        games.push({
-          dateLabel: `Week ${week + 1} ${['Friday', 'Saturday', 'Sunday'][game]}`,
-          homeProgramId,
-          awayProgramId,
-          seriesGameNumber: game + 1,
-          gameType: 'weekend',
-          parkFactor: homeProgram.parkFactor,
-          weatherNote: game === 0 ? 'Friday ace night' : game === 1 ? 'Weekend middle game' : 'Sunday staff management',
-          homeTravelDays: 0,
-          awayTravelDays: game === 0 ? 1 : 0,
-          postseasonStage: 'regular-season',
-        });
-      }
-    }
-  }
-
-  addDeficitShowcaseGames(games);
+  buildNonConferenceWeekends(games, 1, OPENING_NON_CONFERENCE_WEEKS);
+  buildConferenceWeekendSeries(games, CONFERENCE_START_WEEK, TOTAL_REGULAR_SEASON_WEEKS);
+  fillRegionalMidweeks(games, 1, TOTAL_REGULAR_SEASON_WEEKS);
   return games.sort(compareGameContexts);
 }
 
+let cachedLeagueSchedule: GameContext[] | null = null;
+
 export function createProgramSchedule(programId: string) {
-  return createLeagueSchedule().filter((game) => game.homeProgramId === programId || game.awayProgramId === programId);
+  if (!cachedLeagueSchedule) {
+    cachedLeagueSchedule = createLeagueSchedule();
+  }
+  return cachedLeagueSchedule.filter((game) => game.homeProgramId === programId || game.awayProgramId === programId);
 }
 
 export function createSeasonDatabase(): SeasonDatabase {
-  const orderedGames = createLeagueSchedule();
+  const orderedGames = cachedLeagueSchedule ?? (cachedLeagueSchedule = createLeagueSchedule());
   const dayLabelToNumber = new Map<string, number>();
   let currentDay = 0;
 
@@ -1127,11 +1537,656 @@ function calculateEra(line: PlayerPitchingLine) {
   return innings > 0 ? (line.earnedRuns * 9) / innings : 0;
 }
 
-function buildLeagueSeasonSnapshot(userProgramId: string, results: GameResult[]): LeagueSeasonSnapshot {
+function rankTeamSeasonLines(teamLines: TeamSeasonLine[]) {
+  return [...teamLines].sort((left, right) =>
+    right.wins - left.wins
+    || (right.runsScored - right.runsAllowed) - (left.runsScored - left.runsAllowed)
+    || right.runsScored - left.runsScored
+    || (findProgram(right.programId)?.prestige.overall ?? 0) - (findProgram(left.programId)?.prestige.overall ?? 0),
+  );
+}
+
+function mergeGameResultIntoSeasonTotals(
+  teamStats: Map<string, TeamSeasonLine>,
+  battingTotals: Map<string, PlayerBattingLine>,
+  pitchingTotals: Map<string, PlayerPitchingLine>,
+  fieldingTotals: Map<string, PlayerFieldingLine>,
+  result: GameResult,
+) {
+  const homeRuns = totalRunsByInning(result.homeSummary.runsByInning);
+  const awayRuns = totalRunsByInning(result.awaySummary.runsByInning);
+  const homeTeam = teamStats.get(result.homeProgramId)!;
+  const awayTeam = teamStats.get(result.awayProgramId)!;
+  homeTeam.runsScored += homeRuns;
+  homeTeam.runsAllowed += awayRuns;
+  homeTeam.hits += result.homeSummary.hits;
+  homeTeam.walks += result.homeSummary.walks;
+  homeTeam.strikeouts += result.homeSummary.strikeouts;
+  homeTeam.errors += result.homeSummary.errors;
+  homeTeam.homeRuns += result.homeBattingLines.reduce((sum, line) => sum + line.homeRuns, 0);
+  awayTeam.runsScored += awayRuns;
+  awayTeam.runsAllowed += homeRuns;
+  awayTeam.hits += result.awaySummary.hits;
+  awayTeam.walks += result.awaySummary.walks;
+  awayTeam.strikeouts += result.awaySummary.strikeouts;
+  awayTeam.errors += result.awaySummary.errors;
+  awayTeam.homeRuns += result.awayBattingLines.reduce((sum, line) => sum + line.homeRuns, 0);
+
+  if (homeRuns > awayRuns) {
+    homeTeam.wins += 1;
+    awayTeam.losses += 1;
+  } else {
+    awayTeam.wins += 1;
+    homeTeam.losses += 1;
+  }
+
+  for (const line of result.homeBattingLines) {
+    mergeBattingLine(getOrCreateMergedBatting(battingTotals, line), line);
+  }
+  for (const line of result.awayBattingLines) {
+    mergeBattingLine(getOrCreateMergedBatting(battingTotals, line), line);
+  }
+  for (const line of result.homePitchingLines) {
+    mergePitchingLine(getOrCreateMergedPitching(pitchingTotals, line), line);
+  }
+  for (const line of result.awayPitchingLines) {
+    mergePitchingLine(getOrCreateMergedPitching(pitchingTotals, line), line);
+  }
+  for (const line of result.homeFieldingLines) {
+    mergeFieldingLine(getOrCreateMergedFielding(fieldingTotals, line), line);
+  }
+  for (const line of result.awayFieldingLines) {
+    mergeFieldingLine(getOrCreateMergedFielding(fieldingTotals, line), line);
+  }
+}
+
+function chooseTournamentHomeAway(teamA: PostseasonTeam, teamB: PostseasonTeam, hostProgramId: string, neutralSite = false) {
+  if (neutralSite) {
+    return teamA.nationalSeed <= teamB.nationalSeed
+      ? { homeProgramId: teamA.programId, awayProgramId: teamB.programId }
+      : { homeProgramId: teamB.programId, awayProgramId: teamA.programId };
+  }
+  if (teamA.programId === hostProgramId) {
+    return { homeProgramId: teamA.programId, awayProgramId: teamB.programId };
+  }
+  if (teamB.programId === hostProgramId) {
+    return { homeProgramId: teamB.programId, awayProgramId: teamA.programId };
+  }
+  return teamA.nationalSeed <= teamB.nationalSeed
+    ? { homeProgramId: teamA.programId, awayProgramId: teamB.programId }
+    : { homeProgramId: teamB.programId, awayProgramId: teamA.programId };
+}
+
+function simulateTournamentGame(
+  label: string,
+  stage: GameContext['postseasonStage'],
+  seriesGameNumber: number,
+  hostProgramId: string,
+  teamA: PostseasonTeam,
+  teamB: PostseasonTeam,
+  rosterMap: Map<string, Player[]>,
+  seed: string,
+  neutralSite = false,
+) {
+  const { homeProgramId, awayProgramId } = chooseTournamentHomeAway(teamA, teamB, hostProgramId, neutralSite);
+  const hostProgram = findProgram(hostProgramId) ?? findProgram(homeProgramId)!;
+  const context: GameContext = {
+    dateLabel: label,
+    homeProgramId,
+    awayProgramId,
+    seriesGameNumber,
+    gameType: 'postseason',
+    parkFactor: hostProgram.parkFactor,
+    weatherNote: neutralSite ? 'Neutral-site postseason game' : `Postseason game hosted by ${hostProgram.school}`,
+    homeTravelDays: 0,
+    awayTravelDays: 1,
+    postseasonStage: stage,
+    neutralSite,
+  };
+  recoverLeagueRostersForNextDay(rosterMap);
+  const result = simulateScheduledGameWithFatigue(context, rosterMap, seed);
+  const homeRuns = totalRunsByInning(result.homeSummary.runsByInning);
+  const awayRuns = totalRunsByInning(result.awaySummary.runsByInning);
+  const winnerProgramId = homeRuns > awayRuns ? homeProgramId : awayProgramId;
+  const loserProgramId = winnerProgramId === homeProgramId ? awayProgramId : homeProgramId;
+  return { result, winnerProgramId, loserProgramId };
+}
+
+function simulateRegional(
+  regionalIndex: number,
+  teams: PostseasonTeam[],
+  rosterMap: Map<string, Player[]>,
+  seedNamespace: string,
+): { summary: PostseasonRegionalSummary; results: GameResult[]; winner: PostseasonTeam } {
+  const sortedTeams = [...teams].sort((left, right) => (left.regionalSeed ?? 9) - (right.regionalSeed ?? 9));
+  const host = sortedTeams.find((team) => team.regionalSeed === 1) ?? sortedTeams[0]!;
+  const results: GameResult[] = [];
+
+  const game1 = simulateTournamentGame(
+    `Regional ${regionalIndex} Game 1`,
+    'regional',
+    1,
+    host.programId,
+    sortedTeams[0]!,
+    sortedTeams[3]!,
+    rosterMap,
+    `${seedNamespace}-regional-${regionalIndex}-g1`,
+    false,
+  );
+  const game2 = simulateTournamentGame(
+    `Regional ${regionalIndex} Game 2`,
+    'regional',
+    1,
+    host.programId,
+    sortedTeams[1]!,
+    sortedTeams[2]!,
+    rosterMap,
+    `${seedNamespace}-regional-${regionalIndex}-g2`,
+    false,
+  );
+  results.push(game1.result, game2.result);
+
+  const winnersGame = simulateTournamentGame(
+    `Regional ${regionalIndex} Game 3`,
+    'regional',
+    1,
+    host.programId,
+    sortedTeams.find((team) => team.programId === game1.winnerProgramId)!,
+    sortedTeams.find((team) => team.programId === game2.winnerProgramId)!,
+    rosterMap,
+    `${seedNamespace}-regional-${regionalIndex}-g3`,
+    false,
+  );
+  const eliminationOne = simulateTournamentGame(
+    `Regional ${regionalIndex} Game 4`,
+    'regional',
+    1,
+    host.programId,
+    sortedTeams.find((team) => team.programId === game1.loserProgramId)!,
+    sortedTeams.find((team) => team.programId === game2.loserProgramId)!,
+    rosterMap,
+    `${seedNamespace}-regional-${regionalIndex}-g4`,
+    false,
+  );
+  results.push(winnersGame.result, eliminationOne.result);
+
+  const eliminationTwo = simulateTournamentGame(
+    `Regional ${regionalIndex} Game 5`,
+    'regional',
+    1,
+    host.programId,
+    sortedTeams.find((team) => team.programId === winnersGame.loserProgramId)!,
+    sortedTeams.find((team) => team.programId === eliminationOne.winnerProgramId)!,
+    rosterMap,
+    `${seedNamespace}-regional-${regionalIndex}-g5`,
+    false,
+  );
+  results.push(eliminationTwo.result);
+
+  const championshipOne = simulateTournamentGame(
+    `Regional ${regionalIndex} Game 6`,
+    'regional',
+    1,
+    host.programId,
+    sortedTeams.find((team) => team.programId === winnersGame.winnerProgramId)!,
+    sortedTeams.find((team) => team.programId === eliminationTwo.winnerProgramId)!,
+    rosterMap,
+    `${seedNamespace}-regional-${regionalIndex}-g6`,
+    false,
+  );
+  results.push(championshipOne.result);
+
+  let regionalWinnerId = championshipOne.winnerProgramId;
+  let regionalRunnerUpId = championshipOne.loserProgramId;
+  if (championshipOne.winnerProgramId !== winnersGame.winnerProgramId) {
+    const winnerTakeAll = simulateTournamentGame(
+      `Regional ${regionalIndex} Game 7`,
+      'regional',
+      1,
+      host.programId,
+      sortedTeams.find((team) => team.programId === championshipOne.winnerProgramId)!,
+      sortedTeams.find((team) => team.programId === championshipOne.loserProgramId)!,
+      rosterMap,
+      `${seedNamespace}-regional-${regionalIndex}-g7`,
+      false,
+    );
+    results.push(winnerTakeAll.result);
+    regionalWinnerId = winnerTakeAll.winnerProgramId;
+    regionalRunnerUpId = winnerTakeAll.loserProgramId;
+  }
+
+  return {
+    summary: {
+      label: `Regional ${regionalIndex}`,
+      stage: 'regional',
+      hostProgramId: host.programId,
+      teamIds: sortedTeams.map((team) => team.programId),
+      winnerProgramId: regionalWinnerId,
+      loserProgramId: regionalRunnerUpId,
+      winsByProgram: Object.fromEntries(sortedTeams.map((team) => [team.programId, results.filter((result) => {
+        const homeRuns = totalRunsByInning(result.homeSummary.runsByInning);
+        const awayRuns = totalRunsByInning(result.awaySummary.runsByInning);
+        const winnerId = homeRuns > awayRuns ? result.homeProgramId : result.awayProgramId;
+        return winnerId === team.programId;
+      }).length])),
+      seeds: sortedTeams.map((team) => ({
+        programId: team.programId,
+        nationalSeed: team.nationalSeed,
+        regionalSeed: team.regionalSeed ?? 4,
+      })),
+    },
+    results,
+    winner: sortedTeams.find((team) => team.programId === regionalWinnerId)!,
+  };
+}
+
+function simulateBestOfThreeSeries(
+  label: string,
+  stage: 'super-regional' | 'mcws',
+  hostProgramId: string,
+  teamA: PostseasonTeam,
+  teamB: PostseasonTeam,
+  rosterMap: Map<string, Player[]>,
+  seedBase: string,
+  neutralSite = false,
+) {
+  const winsByProgram: Record<string, number> = {
+    [teamA.programId]: 0,
+    [teamB.programId]: 0,
+  };
+  const results: GameResult[] = [];
+
+  for (let gameNumber = 1; gameNumber <= 3; gameNumber += 1) {
+    const game = simulateTournamentGame(
+      `${label} Game ${gameNumber}`,
+      stage,
+      gameNumber,
+      hostProgramId,
+      teamA,
+      teamB,
+      rosterMap,
+      `${seedBase}-g${gameNumber}`,
+      neutralSite,
+    );
+    results.push(game.result);
+    winsByProgram[game.winnerProgramId] += 1;
+    if (winsByProgram[game.winnerProgramId] === 2) {
+      return {
+        summary: {
+          label,
+          stage,
+          hostProgramId: neutralSite ? undefined : hostProgramId,
+          teamIds: [teamA.programId, teamB.programId],
+          winnerProgramId: game.winnerProgramId,
+          loserProgramId: game.loserProgramId,
+          winsByProgram,
+        } satisfies PostseasonSeriesSummary,
+        results,
+        winner: game.winnerProgramId === teamA.programId ? teamA : teamB,
+      };
+    }
+  }
+
+  return {
+    summary: {
+      label,
+      stage,
+      hostProgramId: neutralSite ? undefined : hostProgramId,
+      teamIds: [teamA.programId, teamB.programId],
+      winnerProgramId: winsByProgram[teamA.programId] > winsByProgram[teamB.programId] ? teamA.programId : teamB.programId,
+      loserProgramId: winsByProgram[teamA.programId] > winsByProgram[teamB.programId] ? teamB.programId : teamA.programId,
+      winsByProgram,
+    } satisfies PostseasonSeriesSummary,
+    results,
+    winner: winsByProgram[teamA.programId] > winsByProgram[teamB.programId] ? teamA : teamB,
+  };
+}
+
+function simulateMcwsBracket(
+  bracketIndex: number,
+  teams: PostseasonTeam[],
+  rosterMap: Map<string, Player[]>,
+  seedNamespace: string,
+) {
+  const sortedTeams = [...teams].sort((left, right) => left.nationalSeed - right.nationalSeed);
+  const results: GameResult[] = [];
+  const game1 = simulateTournamentGame(
+    `MCWS Bracket ${bracketIndex} Game 1`,
+    'mcws',
+    1,
+    sortedTeams[0]!.programId,
+    sortedTeams[0]!,
+    sortedTeams[3]!,
+    rosterMap,
+    `${seedNamespace}-mcws-b${bracketIndex}-g1`,
+    true,
+  );
+  const game2 = simulateTournamentGame(
+    `MCWS Bracket ${bracketIndex} Game 2`,
+    'mcws',
+    1,
+    sortedTeams[1]!.programId,
+    sortedTeams[1]!,
+    sortedTeams[2]!,
+    rosterMap,
+    `${seedNamespace}-mcws-b${bracketIndex}-g2`,
+    true,
+  );
+  results.push(game1.result, game2.result);
+
+  const winnersGame = simulateTournamentGame(
+    `MCWS Bracket ${bracketIndex} Game 3`,
+    'mcws',
+    1,
+    sortedTeams[0]!.programId,
+    sortedTeams.find((team) => team.programId === game1.winnerProgramId)!,
+    sortedTeams.find((team) => team.programId === game2.winnerProgramId)!,
+    rosterMap,
+    `${seedNamespace}-mcws-b${bracketIndex}-g3`,
+    true,
+  );
+  const eliminationOne = simulateTournamentGame(
+    `MCWS Bracket ${bracketIndex} Game 4`,
+    'mcws',
+    1,
+    sortedTeams[0]!.programId,
+    sortedTeams.find((team) => team.programId === game1.loserProgramId)!,
+    sortedTeams.find((team) => team.programId === game2.loserProgramId)!,
+    rosterMap,
+    `${seedNamespace}-mcws-b${bracketIndex}-g4`,
+    true,
+  );
+  results.push(winnersGame.result, eliminationOne.result);
+
+  const eliminationTwo = simulateTournamentGame(
+    `MCWS Bracket ${bracketIndex} Game 5`,
+    'mcws',
+    1,
+    sortedTeams[0]!.programId,
+    sortedTeams.find((team) => team.programId === winnersGame.loserProgramId)!,
+    sortedTeams.find((team) => team.programId === eliminationOne.winnerProgramId)!,
+    rosterMap,
+    `${seedNamespace}-mcws-b${bracketIndex}-g5`,
+    true,
+  );
+  results.push(eliminationTwo.result);
+
+  const championshipOne = simulateTournamentGame(
+    `MCWS Bracket ${bracketIndex} Game 6`,
+    'mcws',
+    1,
+    sortedTeams[0]!.programId,
+    sortedTeams.find((team) => team.programId === winnersGame.winnerProgramId)!,
+    sortedTeams.find((team) => team.programId === eliminationTwo.winnerProgramId)!,
+    rosterMap,
+    `${seedNamespace}-mcws-b${bracketIndex}-g6`,
+    true,
+  );
+  results.push(championshipOne.result);
+
+  let bracketWinnerId = championshipOne.winnerProgramId;
+  let bracketRunnerUpId = championshipOne.loserProgramId;
+  if (championshipOne.winnerProgramId !== winnersGame.winnerProgramId) {
+    const winnerTakeAll = simulateTournamentGame(
+      `MCWS Bracket ${bracketIndex} Game 7`,
+      'mcws',
+      1,
+      sortedTeams[0]!.programId,
+      sortedTeams.find((team) => team.programId === championshipOne.winnerProgramId)!,
+      sortedTeams.find((team) => team.programId === championshipOne.loserProgramId)!,
+      rosterMap,
+      `${seedNamespace}-mcws-b${bracketIndex}-g7`,
+      true,
+    );
+    results.push(winnerTakeAll.result);
+    bracketWinnerId = winnerTakeAll.winnerProgramId;
+    bracketRunnerUpId = winnerTakeAll.loserProgramId;
+  }
+
+  return {
+    summary: {
+      label: `MCWS Bracket ${bracketIndex}`,
+      stage: 'mcws',
+      teamIds: sortedTeams.map((team) => team.programId),
+      winnerProgramId: bracketWinnerId,
+      loserProgramId: bracketRunnerUpId,
+      winsByProgram: Object.fromEntries(sortedTeams.map((team) => [team.programId, results.filter((result) => {
+        const homeRuns = totalRunsByInning(result.homeSummary.runsByInning);
+        const awayRuns = totalRunsByInning(result.awaySummary.runsByInning);
+        const winnerId = homeRuns > awayRuns ? result.homeProgramId : result.awayProgramId;
+        return winnerId === team.programId;
+      }).length])),
+    } satisfies PostseasonSeriesSummary,
+    results,
+    winner: sortedTeams.find((team) => team.programId === bracketWinnerId)!,
+  };
+}
+
+function createSelectedPostseasonTeams(rankedRegularSeasonTeams: TeamSeasonLine[]) {
+  return rankedRegularSeasonTeams.slice(0, 64).map((team, index) => ({
+    programId: team.programId,
+    nationalSeed: index + 1,
+  }));
+}
+
+function createRegionalTeamSeeds(selectedTeams: PostseasonTeam[]) {
+  const oneSeeds = selectedTeams.slice(0, 16);
+  const twoSeeds = selectedTeams.slice(16, 32);
+  const threeSeeds = selectedTeams.slice(32, 48);
+  const fourSeeds = selectedTeams.slice(48, 64);
+
+  return Array.from({ length: 16 }, (_, index) => [
+    { ...oneSeeds[index]!, regionalSeed: 1 },
+    { ...twoSeeds[15 - index]!, regionalSeed: 2 },
+    { ...threeSeeds[index]!, regionalSeed: 3 },
+    { ...fourSeeds[15 - index]!, regionalSeed: 4 },
+  ] satisfies PostseasonTeam[]);
+}
+
+function createEmptySeriesSummary(
+  label: string,
+  stage: PostseasonStage,
+  teamIds: string[],
+  hostProgramId?: string,
+): PostseasonSeriesSummary {
+  return {
+    label,
+    stage,
+    hostProgramId,
+    teamIds,
+    winsByProgram: Object.fromEntries(teamIds.map((teamId) => [teamId, 0])),
+  };
+}
+
+export function initializeLeaguePostseason(rankedRegularSeasonTeams: TeamSeasonLine[]): SeasonPostseasonState {
+  const selectedTeams = createSelectedPostseasonTeams(rankedRegularSeasonTeams);
+  const regionals = createRegionalTeamSeeds(selectedTeams).map((teams, index) => ({
+    ...createEmptySeriesSummary(
+      `Regional ${index + 1}`,
+      'regional',
+      teams.map((team) => team.programId),
+      teams.find((team) => team.regionalSeed === 1)?.programId,
+    ),
+    hostProgramId: teams.find((team) => team.regionalSeed === 1)?.programId ?? teams[0]!.programId,
+    seeds: teams.map((team) => ({
+      programId: team.programId,
+      nationalSeed: team.nationalSeed,
+      regionalSeed: team.regionalSeed ?? 4,
+    })),
+  } satisfies PostseasonRegionalSummary));
+
+  return {
+    currentWeek: 15,
+    results: [],
+    summary: {
+      currentStage: 'selection',
+      currentWeekLabel: 'Postseason Selection',
+      selectedTeamIds: selectedTeams.map((team) => team.programId),
+      nationalSeeds: selectedTeams.slice(0, 16).map((team) => ({
+        programId: team.programId,
+        nationalSeed: team.nationalSeed,
+        regionalSeed: 1,
+      })),
+      regionals,
+      superRegionals: [],
+      mcwsBrackets: [],
+      mcwsTeamIds: [],
+    },
+  };
+}
+
+export function advanceLeaguePostseason(
+  postseason: SeasonPostseasonState,
+  rosterMap: Map<string, Player[]>,
+  seedNamespace = 'postseason',
+): SeasonPostseasonState {
+  const nextState = structuredClone(postseason);
+  const summary = nextState.summary;
+
+  if (summary.currentStage === 'selection') {
+    const regionalResults = summary.regionals.map((regional, index) => {
+      const teams = regional.seeds.map((seed) => ({
+        programId: seed.programId,
+        nationalSeed: seed.nationalSeed,
+        regionalSeed: seed.regionalSeed,
+      }));
+      return simulateRegional(index + 1, teams, rosterMap, `${seedNamespace}-week${nextState.currentWeek}`);
+    });
+    nextState.results.push(...regionalResults.flatMap((entry) => entry.results));
+    summary.regionals = regionalResults.map((entry) => entry.summary);
+
+    const superRegionalPairs: Array<[number, number]> = [
+      [1, 16],
+      [8, 9],
+      [5, 12],
+      [4, 13],
+      [6, 11],
+      [3, 14],
+      [7, 10],
+      [2, 15],
+    ];
+    summary.superRegionals = superRegionalPairs.map(([leftSeed, rightSeed], index) => {
+      const teamA = regionalResults[leftSeed - 1]!.winner;
+      const teamB = regionalResults[rightSeed - 1]!.winner;
+      const hostProgramId = teamA.nationalSeed <= teamB.nationalSeed ? teamA.programId : teamB.programId;
+      return createEmptySeriesSummary(
+        `Super Regional ${index + 1}`,
+        'super-regional',
+        [teamA.programId, teamB.programId],
+        hostProgramId,
+      );
+    });
+    summary.currentStage = 'regionals';
+    summary.currentWeekLabel = 'Regionals Complete';
+    nextState.currentWeek += 1;
+    return nextState;
+  }
+
+  if (summary.currentStage === 'regionals') {
+    const superResults = summary.superRegionals.map((series, index) => {
+      const [teamAId, teamBId] = series.teamIds;
+      const teamASeed = summary.regionals.flatMap((regional) => regional.seeds).find((seed) => seed.programId === teamAId)!;
+      const teamBSeed = summary.regionals.flatMap((regional) => regional.seeds).find((seed) => seed.programId === teamBId)!;
+      return simulateBestOfThreeSeries(
+        `Super Regional ${index + 1}`,
+        'super-regional',
+        series.hostProgramId ?? teamAId,
+        { programId: teamASeed.programId, nationalSeed: teamASeed.nationalSeed, regionalSeed: teamASeed.regionalSeed },
+        { programId: teamBSeed.programId, nationalSeed: teamBSeed.nationalSeed, regionalSeed: teamBSeed.regionalSeed },
+        rosterMap,
+        `${seedNamespace}-week${nextState.currentWeek}-super-${index + 1}`,
+        false,
+      );
+    });
+    nextState.results.push(...superResults.flatMap((entry) => entry.results));
+    summary.superRegionals = superResults.map((entry) => entry.summary);
+    summary.mcwsTeamIds = superResults.map((entry) => entry.winner.programId);
+
+    const mcwsTeams = superResults.map((entry) => entry.winner).sort((left, right) => left.nationalSeed - right.nationalSeed);
+    summary.mcwsBrackets = [
+      createEmptySeriesSummary('MCWS Bracket 1', 'mcws', mcwsTeams.slice(0, 4).map((team) => team.programId)),
+      createEmptySeriesSummary('MCWS Bracket 2', 'mcws', mcwsTeams.slice(4, 8).map((team) => team.programId)),
+    ];
+    summary.currentStage = 'super-regionals';
+    summary.currentWeekLabel = 'Super Regionals Complete';
+    nextState.currentWeek += 1;
+    return nextState;
+  }
+
+  if (summary.currentStage === 'super-regionals') {
+    const mcwsSeedMap = new Map(summary.regionals.flatMap((regional) => regional.seeds).map((seed) => [seed.programId, seed]));
+    const bracketResults = summary.mcwsBrackets.map((bracket, index) => {
+      const teams = bracket.teamIds.map((teamId) => {
+        const seed = mcwsSeedMap.get(teamId)!;
+        return { programId: seed.programId, nationalSeed: seed.nationalSeed, regionalSeed: seed.regionalSeed };
+      });
+      return simulateMcwsBracket(index + 1, teams, rosterMap, `${seedNamespace}-week${nextState.currentWeek}`);
+    });
+    nextState.results.push(...bracketResults.flatMap((entry) => entry.results));
+    summary.mcwsBrackets = bracketResults.map((entry) => entry.summary);
+
+    const finalists = bracketResults.map((entry) => entry.winner);
+    const finalsHostProgramId = finalists[0]!.nationalSeed <= finalists[1]!.nationalSeed ? finalists[0]!.programId : finalists[1]!.programId;
+    summary.finals = createEmptySeriesSummary('MCWS Finals', 'mcws', finalists.map((team) => team.programId), finalsHostProgramId);
+    summary.currentStage = 'mcws';
+    summary.currentWeekLabel = 'MCWS Brackets Complete';
+    nextState.currentWeek += 1;
+    return nextState;
+  }
+
+  if (summary.currentStage === 'mcws' && summary.finals) {
+    const finalistSeedMap = new Map(summary.regionals.flatMap((regional) => regional.seeds).map((seed) => [seed.programId, seed]));
+    const [teamAId, teamBId] = summary.finals.teamIds;
+    const teamASeed = finalistSeedMap.get(teamAId)!;
+    const teamBSeed = finalistSeedMap.get(teamBId)!;
+    const finals = simulateBestOfThreeSeries(
+      'MCWS Finals',
+      'mcws',
+      summary.finals.hostProgramId ?? teamAId,
+      { programId: teamASeed.programId, nationalSeed: teamASeed.nationalSeed, regionalSeed: teamASeed.regionalSeed },
+      { programId: teamBSeed.programId, nationalSeed: teamBSeed.nationalSeed, regionalSeed: teamBSeed.regionalSeed },
+      rosterMap,
+      `${seedNamespace}-week${nextState.currentWeek}-finals`,
+      true,
+    );
+    nextState.results.push(...finals.results);
+    summary.finals = finals.summary;
+    summary.championProgramId = finals.summary.winnerProgramId;
+    summary.runnerUpProgramId = finals.summary.loserProgramId ?? finals.summary.teamIds.find((teamId) => teamId !== finals.summary.winnerProgramId);
+    summary.currentStage = 'complete';
+    summary.currentWeekLabel = 'College World Series Final';
+    nextState.currentWeek += 1;
+  }
+
+  return nextState;
+}
+
+function simulateLeaguePostseason(
+  rankedRegularSeasonTeams: TeamSeasonLine[],
+  rosterMap: Map<string, Player[]>,
+  seedNamespace = 'postseason',
+): { summary: LeaguePostseasonSummary; results: GameResult[] } {
+  let postseason = initializeLeaguePostseason(rankedRegularSeasonTeams);
+  while (postseason.summary.currentStage !== 'complete') {
+    postseason = advanceLeaguePostseason(postseason, rosterMap, seedNamespace);
+  }
+  return {
+    summary: postseason.summary,
+    results: postseason.results,
+  };
+}
+
+function buildLeagueSeasonSnapshot(
+  userProgramId: string,
+  results: GameResult[],
+  rosterMap?: Map<string, Player[]>,
+  postseasonSeedNamespace = 'postseason',
+): LeagueSeasonSnapshot {
   const teamStats = new Map<string, TeamSeasonLine>();
   const battingTotals = new Map<string, PlayerBattingLine>();
   const pitchingTotals = new Map<string, PlayerPitchingLine>();
   const fieldingTotals = new Map<string, PlayerFieldingLine>();
+  let postseason: LeaguePostseasonSummary | undefined;
 
   for (const program of programs) {
     teamStats.set(program.id, {
@@ -1151,50 +2206,17 @@ function buildLeagueSeasonSnapshot(userProgramId: string, results: GameResult[])
   }
 
   for (const result of results) {
-    const homeRuns = totalRunsByInning(result.homeSummary.runsByInning);
-    const awayRuns = totalRunsByInning(result.awaySummary.runsByInning);
-    const homeTeam = teamStats.get(result.homeProgramId)!;
-    const awayTeam = teamStats.get(result.awayProgramId)!;
-    homeTeam.runsScored += homeRuns;
-    homeTeam.runsAllowed += awayRuns;
-    homeTeam.hits += result.homeSummary.hits;
-    homeTeam.walks += result.homeSummary.walks;
-    homeTeam.strikeouts += result.homeSummary.strikeouts;
-    homeTeam.errors += result.homeSummary.errors;
-    homeTeam.homeRuns += result.homeBattingLines.reduce((sum, line) => sum + line.homeRuns, 0);
-    awayTeam.runsScored += awayRuns;
-    awayTeam.runsAllowed += homeRuns;
-    awayTeam.hits += result.awaySummary.hits;
-    awayTeam.walks += result.awaySummary.walks;
-    awayTeam.strikeouts += result.awaySummary.strikeouts;
-    awayTeam.errors += result.awaySummary.errors;
-    awayTeam.homeRuns += result.awayBattingLines.reduce((sum, line) => sum + line.homeRuns, 0);
+    mergeGameResultIntoSeasonTotals(teamStats, battingTotals, pitchingTotals, fieldingTotals, result);
+  }
 
-    if (homeRuns > awayRuns) {
-      homeTeam.wins += 1;
-      awayTeam.losses += 1;
-    } else {
-      awayTeam.wins += 1;
-      homeTeam.losses += 1;
-    }
-
-    for (const line of result.homeBattingLines) {
-      mergeBattingLine(getOrCreateMergedBatting(battingTotals, line), line);
-    }
-    for (const line of result.awayBattingLines) {
-      mergeBattingLine(getOrCreateMergedBatting(battingTotals, line), line);
-    }
-    for (const line of result.homePitchingLines) {
-      mergePitchingLine(getOrCreateMergedPitching(pitchingTotals, line), line);
-    }
-    for (const line of result.awayPitchingLines) {
-      mergePitchingLine(getOrCreateMergedPitching(pitchingTotals, line), line);
-    }
-    for (const line of result.homeFieldingLines) {
-      mergeFieldingLine(getOrCreateMergedFielding(fieldingTotals, line), line);
-    }
-    for (const line of result.awayFieldingLines) {
-      mergeFieldingLine(getOrCreateMergedFielding(fieldingTotals, line), line);
+  const fullScheduleLength = (cachedLeagueSchedule ?? (cachedLeagueSchedule = createLeagueSchedule())).length;
+  const regularSeasonComplete = results.length >= fullScheduleLength;
+  if (regularSeasonComplete && rosterMap) {
+    const rankedTeams = rankTeamSeasonLines([...teamStats.values()]);
+    const postseasonSimulation = simulateLeaguePostseason(rankedTeams, rosterMap, postseasonSeedNamespace);
+    postseason = postseasonSimulation.summary;
+    for (const result of postseasonSimulation.results) {
+      mergeGameResultIntoSeasonTotals(teamStats, battingTotals, pitchingTotals, fieldingTotals, result);
     }
   }
 
@@ -1218,11 +2240,11 @@ function buildLeagueSeasonSnapshot(userProgramId: string, results: GameResult[])
     })
     .slice(0, 12);
   const pitchingLeaders = [...pitchingTotals.values()]
-    .filter((line) => line.outsRecorded >= 9)
+    .filter((line) => line.gamesStarted >= 12 && line.outsRecorded >= 225)
     .sort((left, right) => {
       const leftEra = calculateEra(left);
       const rightEra = calculateEra(right);
-      return leftEra - rightEra || right.strikeouts - left.strikeouts;
+      return leftEra - rightEra || right.strikeouts - left.strikeouts || right.wins - left.wins || right.outsRecorded - left.outsRecorded;
     })
     .slice(0, 12);
   const fieldingLeaders = [...fieldingTotals.values()]
@@ -1236,18 +2258,37 @@ function buildLeagueSeasonSnapshot(userProgramId: string, results: GameResult[])
 
   return {
     generatedAt: new Date().toISOString(),
-    teamStats: [...teamStats.values()].sort((left, right) => right.wins - left.wins || left.losses - right.losses),
+    teamStats: rankTeamSeasonLines([...teamStats.values()]),
     userTeamBatting: [...battingTotals.values()].filter((line) => line.programId === userProgramId).sort((left, right) => right.homeRuns - left.homeRuns || right.runsBattedIn - left.runsBattedIn),
     userTeamPitching: [...pitchingTotals.values()].filter((line) => line.programId === userProgramId).sort((left, right) => right.outsRecorded - left.outsRecorded),
     userTeamFielding: [...fieldingTotals.values()].filter((line) => line.programId === userProgramId).sort((left, right) => right.chances - left.chances),
     battingLeaders,
     pitchingLeaders,
     fieldingLeaders,
+    postseason,
   };
 }
 
-export function buildSeasonSnapshotFromDatabase(userProgramId: string, season: SeasonDatabase) {
-  return buildLeagueSeasonSnapshot(userProgramId, getCompletedResults(season.games));
+export function buildSeasonSnapshotFromDatabase(
+  userProgramId: string,
+  season: SeasonDatabase,
+  leagueRosters?: Record<string, Player[]>,
+) {
+  const rosterMap = new Map<string, Player[]>();
+  for (const program of programs) {
+    rosterMap.set(program.id, program.id === userProgramId
+      ? leagueRosters?.[program.id] ?? createOpponentRoster(program.id, leagueRosters)
+      : createOpponentRoster(program.id, leagueRosters));
+  }
+  const snapshot = buildLeagueSeasonSnapshot(
+    userProgramId,
+    [...getCompletedResults(season.games), ...(season.postseason?.results ?? [])],
+    undefined,
+  );
+  if (season.postseason?.summary) {
+    snapshot.postseason = season.postseason.summary;
+  }
+  return snapshot;
 }
 
 export function simulateSeasonDay(
@@ -1262,19 +2303,18 @@ export function simulateSeasonDay(
   }
 
   const dayGames = season.games.filter((game) => game.dayNumber === nextDayNumber);
+  const rosterMap = new Map<string, Player[]>();
+  for (const program of programs) {
+    rosterMap.set(program.id, cloneRoster(program.id === userProgramId ? userRoster : createOpponentRoster(program.id, leagueRosters)));
+  }
+  recoverLeagueRostersForNextDay(rosterMap);
   let userGame: GameResult | null = null;
   const updatedGames = season.games.map((game) => {
     if (game.dayNumber !== nextDayNumber || game.status === 'final') {
       return game;
     }
 
-    const homeRoster = game.context.homeProgramId === userProgramId
-      ? userRoster
-      : createOpponentRoster(game.context.homeProgramId, leagueRosters);
-    const awayRoster = game.context.awayProgramId === userProgramId
-      ? userRoster
-      : createOpponentRoster(game.context.awayProgramId, leagueRosters);
-    const result = simulateGame(game.context, homeRoster, awayRoster, `season-db-${game.id}`);
+    const result = simulateScheduledGameWithFatigue(game.context, rosterMap, `season-db-${game.id}`);
     if (game.context.homeProgramId === userProgramId || game.context.awayProgramId === userProgramId) {
       userGame = result;
     }
@@ -1303,22 +2343,24 @@ export function simulateLeagueSeasonSnapshot(
   userRoster: Player[],
   weeksPlayed = 14,
   leagueRosters?: Record<string, Player[]>,
+  seedNamespace = 'snapshot',
 ): LeagueSeasonSnapshot {
   const rosterMap = new Map<string, Player[]>();
   for (const program of programs) {
-    rosterMap.set(program.id, program.id === userProgramId ? userRoster : createOpponentRoster(program.id, leagueRosters));
+    rosterMap.set(program.id, cloneRoster(program.id === userProgramId ? userRoster : createOpponentRoster(program.id, leagueRosters)));
   }
 
-  const results = createLeagueSchedule()
-    .filter((game) => scheduleWeekNumber(game) <= weeksPlayed)
-    .map((game) => simulateGame(
-      game,
-      rosterMap.get(game.homeProgramId)!,
-      rosterMap.get(game.awayProgramId)!,
-      `snapshot-${gameRecordId(game)}`,
-    ));
+  const results: GameResult[] = [];
+  let lastDateLabel = '';
+  for (const game of createLeagueSchedule().filter((entry) => scheduleWeekNumber(entry) <= weeksPlayed)) {
+    if (game.dateLabel !== lastDateLabel) {
+      recoverLeagueRostersForNextDay(rosterMap);
+      lastDateLabel = game.dateLabel;
+    }
+    results.push(simulateScheduledGameWithFatigue(game, rosterMap, `${seedNamespace}-${gameRecordId(game)}`));
+  }
 
-  return buildLeagueSeasonSnapshot(userProgramId, results);
+  return buildLeagueSeasonSnapshot(userProgramId, results, rosterMap, seedNamespace);
 }
 
 function totalRunsByInning(runsByInning: number[]) {

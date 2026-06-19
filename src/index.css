@@ -220,6 +220,26 @@ select {
   font-size: 0.94rem;
 }
 
+.nav-item__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-item__badge {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(215, 168, 77, 0.16);
+  border: 1px solid rgba(215, 168, 77, 0.28);
+  color: var(--accent);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
 .nav-item:hover,
 .nav-item.is-active {
   background: #1a2735;
@@ -1009,6 +1029,151 @@ select {
   line-height: 1.45;
 }
 
+.mail-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.table-shell--mail-list,
+.table-shell--mail-detail {
+  min-width: 0;
+}
+
+.mail-list {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.mail-toolbar,
+.mail-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mail-toolbar {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(12, 20, 29, 0.56);
+}
+
+.mail-toolbar__status {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  margin-right: auto;
+}
+
+.mail-list__item {
+  border: 0;
+  background: linear-gradient(180deg, rgba(18, 28, 40, 0.95), rgba(14, 22, 32, 0.98));
+  color: var(--text);
+  padding: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.mail-list__item:hover,
+.mail-list__item.is-selected {
+  background: linear-gradient(180deg, rgba(31, 46, 62, 0.98), rgba(21, 32, 45, 0.98));
+}
+
+.mail-list__item.is-unread {
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+
+.mail-list__item strong,
+.mail-detail__header h3 {
+  margin: 0;
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.mail-list__content,
+.mail-select-toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.mail-list__content {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mail-select-toggle {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.mail-select-toggle.is-checked {
+  border-color: rgba(215, 168, 77, 0.4);
+  background: rgba(215, 168, 77, 0.14);
+}
+
+.mail-list__item p,
+.mail-detail__header p,
+.mail-detail__body {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.mail-list__topline,
+.mail-detail__meta,
+.mail-detail__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mail-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(127, 182, 231, 0.1);
+  border: 1px solid rgba(127, 182, 231, 0.18);
+  color: var(--accent-2);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mail-detail {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.mail-detail__body {
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
 .info-panel {
   padding: 9px;
 }
@@ -1111,6 +1276,305 @@ select {
 
 .day-action-card button {
   justify-self: start;
+}
+
+.dossier-shell {
+  --dossier-accent: var(--accent-2);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--dossier-accent) 18%, transparent), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent 28%),
+    linear-gradient(180deg, #132031 0%, #101a27 100%);
+}
+
+.dossier-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--dossier-accent) 24%, transparent), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
+}
+
+.dossier-hero__identity h2 {
+  margin: 6px 0 0;
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-family: "IBM Plex Serif", Georgia, serif;
+  line-height: 1;
+}
+
+.dossier-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 8px;
+}
+
+.dossier-hero__meta span,
+.dossier-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 13, 20, 0.42);
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dossier-chip {
+  color: var(--text);
+}
+
+.dossier-chip.is-alert {
+  border-color: rgba(241, 154, 154, 0.35);
+  color: var(--danger);
+}
+
+.dossier-chip.is-committed {
+  border-color: rgba(149, 211, 157, 0.35);
+  color: var(--success);
+}
+
+.dossier-chip.is-targeted {
+  border-color: rgba(127, 182, 231, 0.35);
+  color: var(--accent-2);
+}
+
+.dossier-hero__status {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.dossier-hero__summary {
+  min-width: 140px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: rgba(7, 13, 20, 0.5);
+  text-align: right;
+}
+
+.dossier-hero__summary strong {
+  display: block;
+  font-family: "IBM Plex Serif", Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.dossier-hero__summary span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dossier-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dossier-nav span {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(10, 17, 24, 0.46);
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dossier-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(220px, 1fr) minmax(0, 1.5fr);
+  gap: 10px;
+}
+
+.dossier-card {
+  border: 1px solid var(--line);
+  background: rgba(9, 16, 24, 0.6);
+}
+
+.dossier-card--wide {
+  min-width: 0;
+}
+
+.dossier-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(20, 31, 45, 0.75);
+}
+
+.dossier-card__header span,
+.dossier-card__subhead {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dossier-card__header strong {
+  font-size: 0.86rem;
+}
+
+.dossier-card__subhead {
+  margin: 0 0 10px;
+}
+
+.dossier-facts,
+.dossier-summary-stack,
+.dossier-note-list {
+  display: grid;
+}
+
+.dossier-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dossier-facts div,
+.dossier-stat-line,
+.dossier-note {
+  padding: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.dossier-facts div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.dossier-facts span,
+.dossier-stat-line span,
+.dossier-note span,
+.dossier-note strong,
+.dossier-offer-form label span,
+.dossier-empty-state {
+  display: block;
+}
+
+.dossier-facts span,
+.dossier-stat-line span,
+.dossier-note strong,
+.dossier-offer-form label span,
+.dossier-empty-state {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dossier-facts strong,
+.dossier-stat-line strong,
+.dossier-note span,
+.dossier-empty-state {
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+.dossier-summary-stack .dossier-stat-line:last-child,
+.dossier-note-list .dossier-note:last-child {
+  border-bottom: 0;
+}
+
+.dossier-rating-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 10px;
+}
+
+.dossier-rating-row {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.dossier-rating-row span,
+.dossier-rating-row strong {
+  font-size: 0.78rem;
+}
+
+.dossier-rating-row__track,
+.dossier-school-row__track {
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.dossier-rating-row__fill,
+.dossier-school-row__fill {
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dossier-accent) 70%, white), var(--dossier-accent));
+}
+
+.dossier-rating-row__fill.is-secondary {
+  background: linear-gradient(90deg, #d7a84d, #c88122);
+}
+
+.dossier-rating-row__fill.is-tertiary {
+  background: linear-gradient(90deg, #79c38f, #2c9259);
+}
+
+.dossier-school-list,
+.dossier-actions,
+.dossier-offer-form {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.dossier-school-row {
+  display: grid;
+  grid-template-columns: 36px minmax(110px, 0.8fr) minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.dossier-school-row span,
+.dossier-school-row em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+}
+
+.dossier-school-row strong.is-user-school {
+  color: var(--text);
+}
+
+.dossier-offer-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.ui-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(8, 14, 21, 0.8);
+  color: var(--text);
+}
+
+.dossier-inline-note {
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .sim-status {
@@ -1332,6 +1796,10 @@ select {
 
   .program-browser-toolbar {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .mail-layout {
+    grid-template-columns: 1fr;
   }
 
   .table-shell {
@@ -1878,6 +2346,11 @@ select {
   .program-search {
     padding: 0 10px;
   }
+
+  .mail-list__item,
+  .mail-detail {
+    padding: 10px;
+  }
 }
 
 @media (max-width: 1080px) {
@@ -1981,4 +2454,129 @@ select {
   display: grid;
   grid-template-columns: minmax(44px, 0.4fr) minmax(180px, 2fr) minmax(60px, 0.6fr);
   min-width: 300px;
+}
+
+.manager-header-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-soft) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sim-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 68%, transparent);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.sim-overlay__card {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  min-width: min(320px, 100%);
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 78%, transparent);
+  box-shadow: 0 18px 50px rgba(8, 15, 28, 0.22);
+  text-align: center;
+}
+
+.sim-overlay__card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.postseason-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.postseason-grid--narrow {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.postseason-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.postseason-card--projected {
+  border-style: dashed;
+}
+
+.postseason-card--finals {
+  margin-top: 16px;
+}
+
+.postseason-card__meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.postseason-card__teams {
+  display: grid;
+  gap: 10px;
+}
+
+.postseason-card__team {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-soft) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+}
+
+.postseason-card__team span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.seed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.seed-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel-soft) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, transparent);
+}
+
+.seed-card--projected {
+  border-style: dashed;
+}
+
+.seed-card span,
+.seed-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.screen__header--compact {
+  margin-top: 18px;
 }

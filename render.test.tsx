@@ -6,5 +6,5 @@ import { test, expect } from 'vitest';
 
 test('renders App without crashing', () => {
   const { container } = render(<App />);
-  expect(container.textContent).toContain('Choose a school to take over');
+  expect(container.textContent).toContain('Choose your school');
 });

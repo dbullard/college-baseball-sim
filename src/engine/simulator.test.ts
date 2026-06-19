@@ -18,6 +18,29 @@ const strongProgramId = sortedPrograms[1]!.id;
 const midMajorProgramId = sortedPrograms[sortedPrograms.length - 1]!.id;
 const challengerProgramId = [...sortedPrograms].reverse().find((program) => program.prestige.overall >= 70)?.id ?? programs[programs.length - 1]!.id;
 
+function conferenceKey(conference: string) {
+  switch (conference) {
+    case 'ACC':
+      return 'Atlantic Coast';
+    case 'SEC':
+      return 'Southeastern';
+    case 'AAC':
+      return 'American';
+    case 'CUSA':
+      return 'Conference USA';
+    case 'MVC':
+      return 'Missouri Valley';
+    default:
+      return conference;
+  }
+}
+
+const conferenceSizes = programs.reduce((sizes, program) => {
+  const key = conferenceKey(program.conference);
+  sizes.set(key, (sizes.get(key) ?? 0) + 1);
+  return sizes;
+}, new Map<string, number>());
+
 describe('lineup-level franchise simulator', () => {
   it('starts each program with a legal 34-man roster', () => {
     const roster = createRosterForProgram(eliteProgramId);
@@ -33,13 +56,17 @@ describe('lineup-level franchise simulator', () => {
     expect(outlook.averageWins).toBeLessThan(50);
   });
 
-  it('builds one real 56-game regular-season schedule per program', () => {
+  it('builds one realistic regular-season schedule per program without double-booking a day', () => {
     const season = createSeasonDatabase();
-    expect(season.games).toHaveLength((programs.length * 56) / 2);
+    expect(season.games.length).toBeLessThanOrEqual((programs.length * 56) / 2);
+    const underfilledPrograms: string[] = [];
 
     for (const program of programs) {
       const programSchedule = createProgramSchedule(program.id);
-      expect(programSchedule).toHaveLength(56);
+      if (programSchedule.length < 52) {
+        underfilledPrograms.push(`${program.id}:${programSchedule.length}`);
+      }
+      expect(programSchedule.length).toBeLessThanOrEqual(56);
 
       const gamesByDay = new Map<number, number>();
       for (const game of season.games.filter((entry) => entry.context.homeProgramId === program.id || entry.context.awayProgramId === program.id)) {
@@ -47,14 +74,92 @@ describe('lineup-level franchise simulator', () => {
       }
       expect(Math.max(...gamesByDay.values())).toBe(1);
     }
+
+    expect(underfilledPrograms).toEqual([]);
   });
 
   it('reads a program schedule from the persisted season database', () => {
     const season = createSeasonDatabase();
     const schedule = getProgramSeasonSchedule(season, eliteProgramId);
 
-    expect(schedule).toHaveLength(56);
+    expect(schedule.length).toBeGreaterThanOrEqual(52);
+    expect(schedule.length).toBeLessThanOrEqual(56);
     expect(schedule.every((game) => game.context.homeProgramId === eliteProgramId || game.context.awayProgramId === eliteProgramId)).toBe(true);
+  });
+
+  it('opens the season on a Friday non-conference weekend', () => {
+    const season = createSeasonDatabase();
+    const openingDayGames = season.games.filter((game) => game.dayNumber === 1);
+
+    expect(openingDayGames.length).toBeGreaterThan(0);
+    expect(openingDayGames.every((game) => game.dayLabel.includes('Friday'))).toBe(true);
+    expect(openingDayGames.every((game) => {
+      const home = programs.find((program) => program.id === game.context.homeProgramId)!;
+      const away = programs.find((program) => program.id === game.context.awayProgramId)!;
+      return conferenceKey(home.conference) !== conferenceKey(away.conference);
+    })).toBe(true);
+  });
+
+  it('does not schedule conference games before week 5', () => {
+    const season = createSeasonDatabase();
+    const earlyGames = season.games.filter((game) => {
+      const match = game.dayLabel.match(/Week (\d+)/);
+      return match && Number.parseInt(match[1], 10) < 5;
+    });
+
+    expect(earlyGames.every((game) => {
+      const home = programs.find((program) => program.id === game.context.homeProgramId)!;
+      const away = programs.find((program) => program.id === game.context.awayProgramId)!;
+      return conferenceKey(home.conference) !== conferenceKey(away.conference);
+    })).toBe(true);
+  });
+
+  it('keeps large-conference teams near 30 conference games and on conference weekends', () => {
+    const season = createSeasonDatabase();
+
+    for (const program of programs) {
+      const normalizedConference = conferenceKey(program.conference);
+      if ((conferenceSizes.get(normalizedConference) ?? 0) < 10) {
+        continue;
+      }
+
+      const schedule = getProgramSeasonSchedule(season, program.id);
+      const conferenceGames = schedule.filter((game) => {
+        const opponentId = game.context.homeProgramId === program.id
+          ? game.context.awayProgramId
+          : game.context.homeProgramId;
+        const opponent = programs.find((entry) => entry.id === opponentId)!;
+        return conferenceKey(opponent.conference) === normalizedConference;
+      });
+
+      expect(conferenceGames.length).toBeGreaterThanOrEqual(27);
+      expect(conferenceGames.length).toBeLessThanOrEqual(30);
+      expect(conferenceGames.every((game) => !game.dayLabel.includes('Tuesday'))).toBe(true);
+    }
+  });
+
+  it('uses Tuesday only for optional non-conference regional games', () => {
+    const season = createSeasonDatabase();
+    const tuesdayGames = season.games.filter((game) => game.dayLabel.includes('Tuesday'));
+
+    expect(tuesdayGames.length).toBeGreaterThan(0);
+    expect(tuesdayGames.every((game) => {
+      const home = programs.find((program) => program.id === game.context.homeProgramId)!;
+      const away = programs.find((program) => program.id === game.context.awayProgramId)!;
+      return conferenceKey(home.conference) !== conferenceKey(away.conference);
+    })).toBe(true);
+  });
+
+  it('prefers same-state or nearby opponents for Tuesday games when available', () => {
+    const season = createSeasonDatabase();
+    const tuesdayGames = season.games.filter((game) => game.dayLabel.includes('Tuesday'));
+    const sameStateOrRegionalRate = tuesdayGames.filter((game) => {
+      const home = programs.find((program) => program.id === game.context.homeProgramId)!;
+      const away = programs.find((program) => program.id === game.context.awayProgramId)!;
+      return home.location.state === away.location.state || home.region === away.region;
+    }).length / Math.max(tuesdayGames.length, 1);
+
+    expect(sameStateOrRegionalRate).toBeGreaterThanOrEqual(0.8);
   });
 
   it('advances the next scheduled user matchup after a game is finalized', () => {
@@ -194,5 +299,28 @@ describe('lineup-level franchise simulator', () => {
     expect(snapshot.teamStats.length).toBeGreaterThan(5);
     expect(snapshot.battingLeaders.length).toBeGreaterThan(0);
     expect(snapshot.pitchingLeaders.length).toBeGreaterThan(0);
+    expect(snapshot.pitchingLeaders.every((line) => line.outsRecorded >= 225 && line.gamesStarted >= 12)).toBe(true);
+  });
+
+  it('simulates a full NCAA-style postseason once the regular season is complete', () => {
+    const roster = createRosterForProgram(strongProgramId);
+    const snapshot = simulateLeagueSeasonSnapshot(strongProgramId, roster, 14);
+
+    expect(snapshot.postseason).toBeDefined();
+    expect(snapshot.postseason?.selectedTeamIds).toHaveLength(64);
+    expect(snapshot.postseason?.regionals).toHaveLength(16);
+    expect(snapshot.postseason?.superRegionals).toHaveLength(8);
+    expect(snapshot.postseason?.mcwsTeamIds).toHaveLength(8);
+    expect(snapshot.postseason?.championProgramId).toBeTruthy();
+    expect(snapshot.postseason?.runnerUpProgramId).toBeTruthy();
+  });
+
+  it('credits pitcher decisions to actual pitchers instead of leaving leaders with zero wins', () => {
+    const snapshot = simulateLeagueSeasonSnapshot(strongProgramId, createRosterForProgram(strongProgramId), 14);
+    const winningPitchers = snapshot.pitchingLeaders.filter((line) => line.wins > 0);
+    const savePitchers = snapshot.pitchingLeaders.filter((line) => line.saves > 0);
+
+    expect(winningPitchers.length).toBeGreaterThan(0);
+    expect(savePitchers.length).toBeGreaterThan(0);
   });
 });
