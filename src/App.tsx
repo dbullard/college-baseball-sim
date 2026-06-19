@@ -1098,6 +1098,23 @@ function buildOtherActions(pitchBoard: PitchSlot[]): RecruitingActionId[] {
     .filter((id) => !boardIds.has(id));
 }
 
+function getRivalDisplay(recruit: Recruit, userProgramId: string): { rank: number; gapLabel: string; rivalName: string } | null {
+  if (!recruit.topSchools?.length) return null;
+  const userIdx = recruit.topSchools.findIndex((s) => s.programId === userProgramId);
+  if (userIdx < 0) return null;
+  const userScore = recruit.topSchools[userIdx]!.score;
+  const rival = recruit.topSchools.find((s) => s.programId !== userProgramId);
+  const scoutingLevel = recruit.scoutingLevel ?? 0;
+  const rivalName = rival
+    ? scoutingLevel >= 3
+      ? (programs.find((p) => p.id === rival.programId)?.school ?? 'Unknown School')
+      : 'Unknown School'
+    : '';
+  const gap = rival ? Math.round(userScore - rival.score) : 0;
+  const gapLabel = rival ? (gap > 0 ? `+${gap}` : `${gap}`) : '';
+  return { rank: userIdx + 1, gapLabel, rivalName };
+}
+
 function buildRecruitPreviewStats(recruit: Recruit) {
   const offense = recruit.offense;
   const pitching = recruit.pitching;
@@ -2882,6 +2899,16 @@ function App() {
                             <div className="table-cell table-cell--program">
                               <button className="crumb-button" style={{ fontSize: 'inherit', fontWeight: 'bold' }} onClick={() => { setSelectedRecruitId(recruit.id); setRecruitingView('profile'); setOfferNIL(recruit.userOffer?.nilValue ?? 0); setOfferScholly(recruit.userOffer?.scholarshipPct ?? 0); }}>{recruit.name}</button>
                               <span>{recruit.primaryPosition} • {recruit.stars}★ • scout {recruit.scoutingLevel ?? 0}/3</span>
+                              {(() => {
+                                const rival = getRivalDisplay(recruit, save.userProgramId);
+                                if (!rival) return null;
+                                const dangerColor = rival.rank === 1 && rival.gapLabel && Number(rival.gapLabel) < 8 ? '#ef4444' : 'var(--text-muted)';
+                                return (
+                                  <span style={{ fontSize: '0.7rem', color: dangerColor }}>
+                                    #{rival.rank} {rival.rivalName ? `vs ${rival.rivalName} (${rival.gapLabel})` : `of ${recruit.topSchools?.length ?? 0} schools`}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             <div className="table-cell" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <CommitmentChip interest={recruit.interest} />
@@ -3060,6 +3087,36 @@ function App() {
                         <span>Program Fit</span>
                       </div>
                       <div className="dossier-chip">{recruit.signability} signability</div>
+                      {(recruit.topSchools ?? []).length > 0 && (
+                        <div style={{ marginTop: '8px', width: '100%' }}>
+                          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Recruiting Race</p>
+                          {recruit.topSchools!.slice(0, 3).map((school, index) => {
+                            const isUser = school.programId === save.userProgramId;
+                            const scoutingLevel = recruit.scoutingLevel ?? 0;
+                            const schoolName = isUser
+                              ? 'You'
+                              : scoutingLevel >= 3
+                                ? (programs.find((p) => p.id === school.programId)?.school ?? 'Unknown School')
+                                : 'Unknown School';
+                            const userScore = recruit.topSchools!.find((s) => s.programId === save.userProgramId)?.score ?? 0;
+                            const gap = isUser ? null : Math.round(school.score - userScore);
+                            const isDanger = !isUser && gap !== null && gap > -8 && gap < 0;
+                            return (
+                              <div key={school.programId} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                <span style={{ fontSize: '0.68rem', minWidth: '16px', color: 'var(--text-muted)' }}>#{index + 1}</span>
+                                <strong style={{ fontSize: '0.75rem', flex: 1, color: isUser ? 'var(--accent)' : isDanger ? '#ef4444' : undefined }}>
+                                  {schoolName}
+                                </strong>
+                                {gap !== null && (
+                                  <span style={{ fontSize: '0.68rem', color: isDanger ? '#ef4444' : 'var(--text-muted)' }}>
+                                    {gap > 0 ? `+${gap}` : `${gap}`}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
 
