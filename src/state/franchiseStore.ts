@@ -419,7 +419,7 @@ export function availableNilPool(save: FranchiseSave, options?: { excludeRecruit
     if (e.id === options?.excludePortalId || e.destinationProgramId || !e.userOffer) return sum;
     return sum + e.userOffer.nilValue;
   }, 0);
-  return (findProgram(save.userProgramId)?.resources.schoolNilPool ?? 0) - pendingRecruits - pendingPortal;
+  return Math.max(0, (findProgram(save.userProgramId)?.resources.schoolNilPool ?? 0) - pendingRecruits - pendingPortal);
 }
 
 function recruitingPointsPerWeek(programId: string) {

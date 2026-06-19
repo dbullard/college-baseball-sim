@@ -239,7 +239,7 @@ describe('NIL pool', () => {
     save.recruits[0] = { ...recruit, userOffer: { scholarshipPct: 50, nilValue: 50_000 } };
     const pool = availableNilPool(save);
     const program = programs.find((p) => p.id === userProgramId)!;
-    expect(pool).toBe(program.resources.schoolNilPool - 50_000);
+    expect(pool).toBe(Math.max(0, program.resources.schoolNilPool - 50_000));
   });
 
   it('excludes a specific recruit offer when excludeRecruitId is set', () => {
