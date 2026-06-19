@@ -410,6 +410,18 @@ function availableScholarshipPct(save: FranchiseSave, options?: { excludeRecruit
   return Math.max(0, scholarshipBudgetPct(save.userProgramId) - usedRosterScholarshipPct(save.roster) - pendingScholarshipPct(save, options));
 }
 
+export function availableNilPool(save: FranchiseSave, options?: { excludeRecruitId?: string; excludePortalId?: string }): number {
+  const pendingRecruits = save.recruits.reduce((sum, r) => {
+    if (r.id === options?.excludeRecruitId || r.committedProgramId || !r.userOffer) return sum;
+    return sum + r.userOffer.nilValue;
+  }, 0);
+  const pendingPortal = save.portalEntries.reduce((sum, e) => {
+    if (e.id === options?.excludePortalId || e.destinationProgramId || !e.userOffer) return sum;
+    return sum + e.userOffer.nilValue;
+  }, 0);
+  return (findProgram(save.userProgramId)?.resources.schoolNilPool ?? 0) - pendingRecruits - pendingPortal;
+}
+
 function recruitingPointsPerWeek(programId: string) {
   const program = findProgram(programId);
   return 18 + Math.round((program?.resources.donorConfidence ?? 70) / 6) + Math.round((program?.prestige.competitivePrestige ?? 70) / 18);
@@ -792,7 +804,9 @@ function evaluateRecruit(programId: string, recruit: Recruit, week: number, rost
   const offerScholarship = recruit.userOffer?.scholarshipPct ?? 0;
   const schoolGrades = calculateSchoolGrades(programId, recruit, roster);
   const programFit = roster ? calculateRecruitProgramFit(programId, recruit, roster, coachingStaff) : null;
-  const offerScore = offerScholarship * 0.38 + offerNil / 1800;
+  const nilAsk = Math.max(1, recruit.askingNil ?? offerNil);
+  const nilRatio = offerNil > 0 ? Math.min(1.5, offerNil / nilAsk) : 0;
+  const offerScore = offerScholarship * 0.38 + nilRatio * 18;
   const relationshipBoost = (recruit.totalRecruitingPoints ?? 0) * 0.34 + (recruit.targeted ? 6 : 0) + (recruit.scoutingLevel ?? 0) * 2;
   const preferenceScore =
     recruit.preferences.prestige * (prestige / 100) * 0.18 +
@@ -1189,7 +1203,7 @@ function healthScoreForPlayer(player: Player) {
   return clamp(100 - player.rosterStatus.injuryRisk - player.rosterStatus.fatigue + Math.round(player.durability * 0.15), 25, 95);
 }
 
-function calculateStayScore(player: Player, roster: Player[], chemistryScore: number, coachChangePenalty = 0) {
+function calculateStayScore(player: Player, roster: Player[], chemistryScore: number, coachChangePenalty = 0, programPrestige = 70) {
   const samePosition = roster
     .filter((entry) => entry.primaryPosition === player.primaryPosition)
     .sort((left, right) => right.overall - left.overall);
@@ -1200,8 +1214,13 @@ function calculateStayScore(player: Player, roster: Player[], chemistryScore: nu
   const classBoost = player.classYear === 'SR' ? 8 : player.classYear === 'JR' ? 4 : player.classYear === 'FR' ? -3 : 0;
   const dissatisfactionPenalty = player.overall >= 78 && player.rosterStatus.scholarshipPct <= 10 ? 10 : 0;
   const chemistryBoost = Math.round((chemistryScore - 55) / 4) + Math.round((player.leadership.current - player.personalityProfile.selfishness) / 12);
+  // Players who outgrow their program prestige are more likely to portal — but only if morale or chemistry is low
+  const prestigeGapPenalty = (player.morale < 65 || chemistryScore < 58) && player.overall > programPrestige + 8
+    ? Math.round((player.overall - programPrestige - 8) * 0.7)
+    : 0;
   return clamp(
-    player.morale + scholarshipBoost + nilBoost + depthBoost + classBoost + chemistryBoost - dissatisfactionPenalty - coachChangePenalty,
+    player.morale + scholarshipBoost + nilBoost + depthBoost + classBoost + chemistryBoost
+      - dissatisfactionPenalty - coachChangePenalty - prestigeGapPenalty,
     1,
     99,
   );
@@ -1232,7 +1251,13 @@ function buildPortalEntriesForOffseason(
     for (const player of roster) {
       if (player.classYear === 'SR') continue;
       const samePositionCount = roster.filter((entry) => entry.primaryPosition === player.primaryPosition).length;
-      const stayScore = calculateStayScore(player, roster, chemistry.score, coachChangePenalty);
+      const stayScore = calculateStayScore(
+        player,
+        roster,
+        chemistry.score,
+        coachChangePenalty,
+        findProgram(program.id)?.prestigeLevel ?? 70,
+      );
       const random = createSeededRandom(`${program.id}-${player.id}-portal-${nextYear}`);
       const portalChance = stayScore <= 30
         ? 1

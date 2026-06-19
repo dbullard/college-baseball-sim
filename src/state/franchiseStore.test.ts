@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { programs } from '../data/programs';
 import { createRecruitBoard } from '../data/programs';
-import { advanceFranchiseSave, calculateRecruitProgramFit, createInitialSave, getProgramRosterFromSave, useFranchiseStore } from './franchiseStore';
+import { advanceFranchiseSave, availableNilPool, calculateRecruitProgramFit, createInitialSave, getProgramRosterFromSave, useFranchiseStore } from './franchiseStore';
 
 describe('franchise roster lifecycle', () => {
   it('persists a full league of team-specific rosters in the save', () => {
@@ -220,5 +220,48 @@ describe('franchise roster lifecycle', () => {
     expect(afterGames - beforeGames).toBeLessThanOrEqual(1);
     expect(save.season?.lastSimulatedDayLabel).toBe('Week 1 Friday');
     expect(save.currentWeek).toBe(9);
+  });
+});
+
+describe('NIL pool', () => {
+  it('starts at the full schoolNilPool with no commitments or offers', () => {
+    const userProgramId = programs[0]!.id;
+    const save = createInitialSave(userProgramId);
+    const pool = availableNilPool(save);
+    const program = programs.find((p) => p.id === userProgramId)!;
+    expect(pool).toBe(program.resources.schoolNilPool);
+  });
+
+  it('reduces by pending recruit NIL offers', () => {
+    const userProgramId = programs[0]!.id;
+    const save = createInitialSave(userProgramId);
+    const recruit = save.recruits[0]!;
+    save.recruits[0] = { ...recruit, userOffer: { scholarshipPct: 50, nilValue: 50_000 } };
+    const pool = availableNilPool(save);
+    const program = programs.find((p) => p.id === userProgramId)!;
+    expect(pool).toBe(program.resources.schoolNilPool - 50_000);
+  });
+
+  it('excludes a specific recruit offer when excludeRecruitId is set', () => {
+    const userProgramId = programs[0]!.id;
+    const save = createInitialSave(userProgramId);
+    const recruit = save.recruits[0]!;
+    save.recruits[0] = { ...recruit, userOffer: { scholarshipPct: 50, nilValue: 50_000 } };
+    const poolWithExclusion = availableNilPool(save, { excludeRecruitId: recruit.id });
+    const program = programs.find((p) => p.id === userProgramId)!;
+    expect(poolWithExclusion).toBe(program.resources.schoolNilPool);
+  });
+});
+
+describe('prestige gap portal trigger', () => {
+  it('produces portal entries from low-prestige programs after season rollover', () => {
+    const userProgramId = programs[0]!.id;
+    const save = createInitialSave(userProgramId);
+    save.phase = 'season-complete';
+    const nextSave = advanceFranchiseSave(save);
+    const nextLowRoster = getProgramRosterFromSave(nextSave, [...programs].sort((a, b) => a.prestige.overall - b.prestige.overall)[0]!.id);
+
+    expect(nextSave.portalEntries.length).toBeGreaterThan(0);
+    expect(nextLowRoster.length).toBeLessThanOrEqual(34);
   });
 });
