@@ -1277,7 +1277,14 @@ interface FranchiseState {
   certifyCurrentRoster: () => boolean;
   restartSeason: () => void;
   simulateNextUserGame: () => void;
+  advanceDay: () => void;
   advanceWeek: () => void;
+}
+
+function seasonWeekFromLabel(label?: string | null) {
+  if (!label) return null;
+  const match = label.match(/Week (\d+)/i);
+  return match ? Number(match[1]) : null;
 }
 
 function startNextSeason(save: FranchiseSave) {
@@ -1688,9 +1695,48 @@ export const useFranchiseStore = create<FranchiseState>()(
           selectedTab: 'preview',
         };
       }),
-      advanceWeek: () => set((state) => {
+      advanceDay: () => set((state) => {
         if (!state.save) return state;
         const nextSave = advanceFranchiseSave(state.save);
+
+        return {
+          save: nextSave,
+          lastPreviewGame: buildNextUserPreview(nextSave),
+        };
+      }),
+      advanceWeek: () => set((state) => {
+        if (!state.save) return state;
+        let nextSave = state.save;
+
+        if (nextSave.openingDayReady && nextSave.season) {
+          const startingWeek = seasonWeekFromLabel(
+            nextSave.season.lastSimulatedDayLabel
+              ?? nextSave.season.games.find((game) => game.status === 'scheduled')?.dayLabel
+              ?? null,
+          );
+
+          for (let index = 0; index < 7; index += 1) {
+            const advancedSave = advanceFranchiseSave(nextSave);
+            if (advancedSave === nextSave) break;
+            nextSave = advancedSave;
+
+            if (!nextSave.season || nextSave.phase === 'season-complete') {
+              break;
+            }
+
+            const upcomingWeek = seasonWeekFromLabel(
+              nextSave.season.games.find((game) => game.status === 'scheduled')?.dayLabel
+                ?? nextSave.season.lastSimulatedDayLabel
+                ?? null,
+            );
+
+            if (startingWeek !== null && upcomingWeek !== null && upcomingWeek !== startingWeek) {
+              break;
+            }
+          }
+        } else {
+          nextSave = advanceFranchiseSave(nextSave);
+        }
 
         return {
           save: nextSave,

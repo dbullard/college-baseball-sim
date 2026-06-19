@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRightLeft,
+  ArrowUpDown,
   BadgeDollarSign,
   BarChart3,
   BookOpen,
@@ -9,6 +11,8 @@ import {
   FolderKanban,
   GraduationCap,
   Mail,
+  Menu,
+  Search,
   Settings2,
   ShieldAlert,
   Sparkles,
@@ -67,6 +71,7 @@ const recruitingActionButtons: Array<{ id: RecruitingActionId; label: string; co
 ];
 
 type RosterSortKey = 'name' | 'position' | 'classYear' | 'overall' | 'potential' | 'tools' | 'scholarship' | 'nil';
+type ProgramSortKey = 'school' | 'conference' | 'prestige' | 'nil';
 
 interface MoraleProfile {
   stayScore: number;
@@ -115,6 +120,18 @@ function fieldingPct(chances: number, errors: number) {
 
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
+}
+
+function normalizeSearchText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function simplifiedProgramName(name: string) {
+  return name
+    .replace(/^University of /, '')
+    .replace(/^The /, '')
+    .replace(/ University$/, '')
+    .trim();
 }
 
 function scoreLabel(value: number, thresholds: [number, string][]) {
@@ -870,7 +887,6 @@ function App() {
   const lastPreviewGame = useFranchiseStore((state) => state.lastPreviewGame);
   const createFranchise = useFranchiseStore((state) => state.createFranchise);
   const setSelectedTab = useFranchiseStore((state) => state.setSelectedTab);
-  const restartFranchise = useFranchiseStore((state) => state.restartFranchise);
   const wipeSave = useFranchiseStore((state) => state.wipeSave);
   const releasePlayer = useFranchiseStore((state) => state.releasePlayer);
   const toggleRecruitTarget = useFranchiseStore((state) => state.toggleRecruitTarget);
@@ -882,8 +898,16 @@ function App() {
   const certifyCurrentRoster = useFranchiseStore((state) => state.certifyCurrentRoster);
   const restartSeason = useFranchiseStore((state) => state.restartSeason);
   const simulateNextUserGame = useFranchiseStore((state) => state.simulateNextUserGame);
+  const advanceDay = useFranchiseStore((state) => state.advanceDay);
   const advanceWeek = useFranchiseStore((state) => state.advanceWeek);
   const program = save ? findProgram(save.userProgramId) : null;
+  const [programSearch, setProgramSearch] = useState('');
+  const deferredProgramSearch = useDeferredValue(programSearch);
+  const [programConferenceFilter, setProgramConferenceFilter] = useState('All conferences');
+  const [programSort, setProgramSort] = useState<{ key: ProgramSortKey; direction: 'asc' | 'desc' }>({
+    key: 'prestige',
+    direction: 'desc',
+  });
   const [selectedConference, setSelectedConference] = useState(program?.conference ?? '');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [selectedRecruitId, setSelectedRecruitId] = useState<string>('');
@@ -891,7 +915,7 @@ function App() {
   const [offerScholly, setOfferScholly] = useState(0);
   const [recruitingView, setRecruitingView] = useState<'overview' | 'freshmen' | 'portal' | 'profile'>('overview');
   const [showRecruitingHelp, setShowRecruitingHelp] = useState(false);
-  const [simulatingAction, setSimulatingAction] = useState<null | 'game' | 'day'>(null);
+  const [simulatingAction, setSimulatingAction] = useState<null | 'game' | 'day' | 'week'>(null);
   const simTimeoutRef = useRef<number | null>(null);
   const [rosterSort, setRosterSort] = useState<{ key: RosterSortKey; direction: 'asc' | 'desc' }>({
     key: 'overall',
@@ -923,6 +947,66 @@ function App() {
     setSelectedTab('recruiting');
   };
 
+  const availableProgramConferences = useMemo(
+    () => ['All conferences', ...new Set(programs.map((entry) => entry.conference).sort((left, right) => left.localeCompare(right)))],
+    [],
+  );
+  const filteredPrograms = useMemo(() => {
+    const search = normalizeSearchText(deferredProgramSearch);
+    return programs
+      .filter((entry) => {
+        if (programConferenceFilter !== 'All conferences' && entry.conference !== programConferenceFilter) {
+          return false;
+        }
+        if (!search) return true;
+        const haystack = normalizeSearchText([
+          entry.school,
+          simplifiedProgramName(entry.school),
+          entry.nickname,
+          entry.conference,
+          entry.location.city,
+          entry.location.state,
+          entry.region,
+        ].join(' '));
+        return haystack.includes(search);
+      })
+      .sort((left, right) => {
+        switch (programSort.key) {
+          case 'school':
+            return compareValues(
+              simplifiedProgramName(left.school),
+              simplifiedProgramName(right.school),
+              programSort.direction,
+            );
+          case 'conference':
+            return compareValues(
+              `${left.conference} ${left.school}`,
+              `${right.conference} ${right.school}`,
+              programSort.direction,
+            );
+          case 'nil':
+            return compareValues(left.prestige.nilAttractiveness, right.prestige.nilAttractiveness, programSort.direction)
+              || compareValues(left.school, right.school, 'asc');
+          case 'prestige':
+          default:
+            return compareValues(left.prestige.overall, right.prestige.overall, programSort.direction)
+              || compareValues(left.school, right.school, 'asc');
+        }
+      });
+  }, [deferredProgramSearch, programConferenceFilter, programSort]);
+  const programFilterSummary = useMemo(() => {
+    if (!deferredProgramSearch.trim() && programConferenceFilter === 'All conferences') {
+      return `${filteredPrograms.length} programs ready to open`;
+    }
+    return `${filteredPrograms.length} of ${programs.length} programs match`;
+  }, [deferredProgramSearch, filteredPrograms.length, programConferenceFilter]);
+
+  const clearProgramFilters = () => {
+    setProgramSearch('');
+    setProgramConferenceFilter('All conferences');
+    setProgramSort({ key: 'prestige', direction: 'desc' });
+  };
+
   const seasonOutlook = useMemo(() => selectSeasonOutlook(save), [save]);
 
   useEffect(() => {
@@ -949,7 +1033,7 @@ function App() {
     }
   }, []);
 
-  const runSimAction = (action: 'game' | 'day', execute: () => void) => {
+  const runSimAction = (action: 'game' | 'day' | 'week', execute: () => void) => {
     if (simulatingAction) return;
     setSimulatingAction(action);
     simTimeoutRef.current = window.setTimeout(() => {
@@ -980,39 +1064,88 @@ function App() {
   if (!save || !program) {
     return (
       <main className="ootp-shell ootp-shell--landing">
-        <section className="landing-hero">
+        <section className="landing-hero landing-hero--simple">
           <div>
             <p className="ui-kicker">D1 Baseball Franchise Office</p>
-            <h1>Run a modern college baseball program like a real front office.</h1>
+            <h1>Take over a college baseball program.</h1>
             <p className="ui-muted">
-              The new franchise app is built as a separate management sim with deep roster, league,
-              recruiting, portal, NIL, and opening-day views inspired by the dense workflow of baseball
-              management sims.
+              Pick a school, set your roster, manage recruiting, and build a winner.
             </p>
-          </div>
-
-          <div className="landing-callout">
-            <Sparkles size={18} />
-            <div>
-              <strong>Design target</strong>
-              <p>Browser-style menus, deep tables, quick switching between team and league control screens.</p>
-            </div>
           </div>
         </section>
 
         <section className="screen screen--landing">
           <div className="screen__header">
             <div>
-              <p className="ui-kicker">Available Saves</p>
-              <h2>Choose a school to take over</h2>
+              <p className="ui-kicker">New Franchise</p>
+              <h2>Choose your school</h2>
             </div>
-            <div className="screen__meta">{programs.length} playable launch programs</div>
+            <div className="screen__meta">{programFilterSummary}</div>
           </div>
 
-          <div className="table-shell">
+          <div className="table-shell table-shell--program-browser">
+            <div className="program-browser-toolbar">
+              <label className="program-search" htmlFor="program-search">
+                <Search size={15} />
+                <input
+                  id="program-search"
+                  type="search"
+                  value={programSearch}
+                  onChange={(event) => setProgramSearch(event.target.value)}
+                  placeholder="Search school, nickname, conference, city, or state"
+                />
+              </label>
+
+              <label className="program-control">
+                <span>Conference</span>
+                <select
+                  value={programConferenceFilter}
+                  onChange={(event) => setProgramConferenceFilter(event.target.value)}
+                >
+                  {availableProgramConferences.map((conference) => (
+                    <option key={conference} value={conference}>
+                      {conference}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="program-control">
+                <span>Sort by</span>
+                <select
+                  value={programSort.key}
+                  onChange={(event) => setProgramSort((current) => ({
+                    ...current,
+                    key: event.target.value as ProgramSortKey,
+                  }))}
+                >
+                  <option value="prestige">Prestige</option>
+                  <option value="nil">NIL pull</option>
+                  <option value="school">School</option>
+                  <option value="conference">Conference</option>
+                </select>
+              </label>
+
+              <button
+                className="ui-button ui-button--ghost"
+                type="button"
+                onClick={() => setProgramSort((current) => ({
+                  ...current,
+                  direction: current.direction === 'asc' ? 'desc' : 'asc',
+                }))}
+              >
+                <ArrowUpDown size={14} />
+                {programSort.direction === 'asc' ? 'Ascending' : 'Descending'}
+              </button>
+
+              <button className="ui-button ui-button--ghost" type="button" onClick={clearProgramFilters}>
+                Reset
+              </button>
+            </div>
+
             <div className="table-toolbar">
-              <span>Universe View: Division I Programs</span>
-              <span>Prestige built from recent RPI and Omaha-era history</span>
+              <span>Division I programs</span>
+              <span>Search, filter, and pick a team.</span>
             </div>
             <div className="table-grid table-grid--programs">
               <div className="table-head">Program</div>
@@ -1021,24 +1154,45 @@ function App() {
               <div className="table-head">NIL Pull</div>
               <div className="table-head">Action</div>
 
-              {programs.map((entry) => (
+              {filteredPrograms.map((entry) => (
                 <div className="table-row table-row--programs" key={entry.id}>
-                  <div className="table-cell table-cell--program">
-                    <strong>{entry.school}</strong>
-                    <span>{entry.nickname}</span>
+                  <div
+                    className="table-cell table-cell--program table-cell--program-accent"
+                    style={{
+                      '--program-primary': entry.colors.primary,
+                      '--program-secondary': entry.colors.secondary,
+                    } as CSSProperties}
+                  >
+                    <div className="program-identity">
+                      <div>
+                        <strong>{simplifiedProgramName(entry.school)}</strong>
+                        <span>{entry.nickname}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="table-cell">{entry.conference}</div>
-                  <div className="table-cell">{entry.prestige.overall}</div>
-                  
-                  
-                  <div className="table-cell">{entry.prestige.nilAttractiveness}</div>
-                  <div className="table-cell">
+                  <div className="table-cell" data-label="Conference">
+                    <div className="table-cell__stack">
+                      <strong>{entry.conference}</strong>
+                      <span className="ui-muted">Tier {entry.conferenceTier}</span>
+                    </div>
+                  </div>
+                  <div className="table-cell" data-label="Prestige">{entry.prestige.overall}</div>
+                  <div className="table-cell" data-label="NIL Pull">{entry.prestige.nilAttractiveness}</div>
+                  <div className="table-cell table-cell--actions" data-label="Action">
                     <button className="ui-button ui-button--primary" onClick={() => createFranchise(entry.id)}>
                       Open Franchise
                     </button>
                   </div>
                 </div>
               ))}
+
+              {filteredPrograms.length === 0 ? (
+                <div className="table-row table-row--programs">
+                  <div className="table-cell table-cell--wrap program-empty-state">
+                    No programs match the current search. Try a different school name, conference, or reset the filters.
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
@@ -1058,7 +1212,6 @@ function App() {
     + save.portalEntries.reduce((sum, entry) => sum + (entry.destinationProgramId ? 0 : entry.userOffer?.scholarshipPct ?? 0), 0)
   ) / 100;
   const scholarshipAvailable = Math.max(0, program.resources.scholarshipBudget - scholarshipEquivalencies - pendingScholarshipOffers);
-  const topRecruits = save.recruits.filter((recruit) => !recruit.committedProgramId).slice(0, 5);
   const targetedRecruits = save.recruits.filter((recruit) => recruit.targeted && !recruit.committedProgramId);
   const recruitingNeeds = buildRecruitingNeeds(save.roster);
   const sortedRoster = [...save.roster].sort((left, right) => {
@@ -1118,8 +1271,6 @@ function App() {
     return portalSort.direction === 'asc' ? '▲' : '▼';
   };
 
-  const openPortalEntries = save.portalEntries.filter((entry) => !entry.destinationProgramId).slice(0, 5);
-  const flaggedReviews = save.complianceReviews.slice(0, 4);
   const leagueGames = save.season?.games ?? [];
   const completedLeagueGames = leagueGames.filter((game) => game.status === 'final' && game.result);
   const gameRecordById = new Map(leagueGames.map((game) => [game.id, game]));
@@ -1197,7 +1348,18 @@ function App() {
     && (dayResult.homeProgramId === save.userProgramId || dayResult.awayProgramId === save.userProgramId),
   );
   const isSimulating = simulatingAction !== null;
-  const simulatingLabel = simulatingAction === 'game' ? 'Simulating game...' : simulatingAction === 'day' ? 'Advancing day...' : '';
+  const simulatingLabel = simulatingAction === 'game'
+    ? 'Simulating game...'
+    : simulatingAction === 'week'
+      ? 'Advancing week...'
+      : simulatingAction === 'day'
+        ? 'Advancing day...'
+        : '';
+  const seasonWeekLabel = isSeasonActive
+    ? (save.season?.games.find((game) => game.dayNumber === (save.season?.currentDayNumber || 0) + 1)?.dayLabel
+      ?? save.season?.lastSimulatedDayLabel
+      ?? calendarLabel)
+    : calendarLabel;
   const availableConferences = [...new Set(programs.map((entry) => entry.conference))].sort();
   const majorLeagueResults: LeagueResultCard[] = completedLeagueGames
     .map((game) => {
@@ -1471,36 +1633,32 @@ function App() {
       ? 'Current phase: game day. You can preview the matchup or simulate it directly from here.'
       : 'Current phase: off day. Use the shortcuts below to handle team management before you advance.';
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<null | 'Manager' | 'NCAA' | 'Team' | 'More'>(null);
   const visibleTabs = tabs.filter((tab) => !tab.hidden);
   const groupedTabs = visibleTabs.reduce<Record<string, Array<(typeof tabs)[number]>>>((groups, tab) => {
     groups[tab.group] = [...(groups[tab.group] ?? []), tab];
     return groups;
   }, {});
+  const utilityTabs = tabs.filter((tab) => tab.hidden && tab.id !== 'player');
+  const currentTab = tabs.find((tab) => tab.id === selectedTab);
+  const currentTabGroup = currentTab?.group ?? 'Team';
+  const mobilePrimaryNav = [
+    { id: 'Manager', label: 'Manager', icon: Swords, defaultTab: 'preview' as const },
+    { id: 'NCAA', label: 'NCAA', icon: Trophy, defaultTab: 'stats' as const },
+    { id: 'Team', label: 'Team', icon: Users, defaultTab: 'overview' as const },
+  ];
+
+  const handleMobileGroupToggle = (group: 'Manager' | 'NCAA' | 'Team' | 'More') => {
+    setMobileMenuOpen((current) => current === group ? null : group);
+  };
+
+  const selectedMobileGroupTabs = mobileMenuOpen && mobileMenuOpen !== 'More'
+    ? groupedTabs[mobileMenuOpen] ?? []
+    : [];
 
   return (
     <main className="ootp-shell">
       <aside className="left-rail">
-        <div className="left-rail__brand">
-          <p className="ui-kicker">College Baseball</p>
-          <h1>Franchise Office</h1>
-          <span>{program.school} {program.nickname}</span>
-        </div>
-
-        <div className="left-rail__status">
-          <div>
-            <span>{isSeasonActive ? 'Day' : 'Week'}</span>
-            <strong>{isSeasonActive ? (save.season?.currentDayNumber || 0) : save.currentWeek}</strong>
-          </div>
-          <div>
-            <span>{isSeasonActive ? 'Date' : 'Phase'}</span>
-            <strong>{isSeasonActive ? calendarLabel : save.phase}</strong>
-          </div>
-          <div>
-            <span>Roster</span>
-            <strong className={rosterCount > 34 ? 'is-danger' : ''}>{rosterCount}/34</strong>
-          </div>
-        </div>
-
         <nav className="left-rail__nav">
           {Object.entries(groupedTabs).map(([group, groupTabs]) => (
             <section key={group} className="nav-group">
@@ -1532,27 +1690,35 @@ function App() {
         <header className="manager-header" style={{ '--team-primary': program.colors.primary } as any}>
           <div className="manager-header-left">
             <h2>{program.school} {program.nickname}</h2>
-            <div className="manager-header-sub">Record: {currentRecord} | Projected: {seasonOutlook?.averageWins ?? '--'}</div>
+            <div className="manager-header-sub">
+              <span>Record {currentRecord}</span>
+              <span>Projected {seasonOutlook?.averageWins ?? '--'}</span>
+              <span>Prestige {program.prestige.overall}</span>
+              <span>{program.conference}</span>
+              <span className={rosterCount > 34 ? 'is-danger' : ''}>Roster {rosterCount}/34</span>
+            </div>
           </div>
           <div className="manager-header-center">
-            <div>{calendarLabel}</div>
+            <strong>{isSeasonActive ? seasonWeekLabel : `Week ${save.currentWeek}`}</strong>
+            <span>{isSeasonActive ? `Day ${save.season?.currentDayNumber || 0} • Phase: ${save.phase}` : `Phase: ${save.phase}`}</span>
           </div>
           <div className="manager-header-right">
-            <div className="manager-header-actions">
-              <button onClick={() => setSelectedTab('settings')}>Settings</button>
-              <button onClick={() => certifyCurrentRoster()}>Certify Roster</button>
-            </div>
             <button
               className="btn-continue"
               disabled={isSimulating}
-              onClick={() => runSimAction('day', advanceWeek)}
+              onClick={() => runSimAction('day', advanceDay)}
             >
               {simulatingAction === 'day' ? 'ADVANCING...' : 'ADVANCE DAY'}
             </button>
+            <button
+              className="btn-continue btn-continue--secondary"
+              disabled={isSimulating}
+              onClick={() => runSimAction('week', advanceWeek)}
+            >
+              {simulatingAction === 'week' ? 'ADVANCING...' : 'ADVANCE WEEK'}
+            </button>
           </div>
         </header>
-
-        
 
         <section className="workspace-grid">
           <div className="workspace-main">
@@ -1836,47 +2002,6 @@ function App() {
                           </div>
                         </div>
                       ))}
-                  </div>
-                </div>
-
-                <div className="mini-table">
-                  <div className="mini-table__header">
-                    <CalendarDays size={16} />
-                    <strong>Season controls</strong>
-                  </div>
-                  <div className="mini-table__body">
-                    <div className="mini-table__row">
-                      <span>Restart franchise</span>
-                      <button
-                        className="ui-button ui-button--ghost"
-                        onClick={() => {
-                          if (window.confirm(`Restart ${program.school} and erase current progress?`)) {
-                            restartFranchise();
-                          }
-                        }}
-                      >
-                        Restart
-                      </button>
-                    </div>
-                    <div className="mini-table__row">
-                      <span>Restart season</span>
-                      <button
-                        className="ui-button ui-button--ghost"
-                        onClick={() => {
-                          if (window.confirm(`Restart the ${program.school} season schedule and clear all played games?`)) {
-                            restartSeason();
-                          }
-                        }}
-                      >
-                        Reset
-                      </button>
-                    </div>
-                    <div className="mini-table__row">
-                      <span>League Home</span>
-                      <button className="ui-button ui-button--ghost" onClick={() => setSelectedTab('overview')}>
-                        Open
-                      </button>
-                    </div>
                   </div>
                 </div>
               </section>
@@ -2984,7 +3109,7 @@ function App() {
                   <article className="info-panel">
                     <span>{isSeasonActive ? 'Season record' : 'Today’s focus'}</span>
                     <strong>{isSeasonActive ? currentRecord : calendarLabel}</strong>
-                    <p>{isSeasonActive ? 'Sim Game finalizes only this matchup; Advance Day moves the whole league calendar.' : dayViewFocus}</p>
+                    <p>{isSeasonActive ? 'Sim Game plays this matchup, Advance Day moves one league day, and Advance Week jumps to the next week.' : dayViewFocus}</p>
                   </article>
                 </div>
 
@@ -3002,10 +3127,18 @@ function App() {
                   <button
                     className="ui-button"
                     disabled={isSimulating}
-                    onClick={() => runSimAction('day', advanceWeek)}
+                    onClick={() => runSimAction('day', advanceDay)}
                   >
                     <CalendarDays size={15} />
                     {simulatingAction === 'day' ? 'Advancing...' : 'Advance Day'}
+                  </button>
+                  <button
+                    className="ui-button ui-button--ghost"
+                    disabled={isSimulating}
+                    onClick={() => runSimAction('week', advanceWeek)}
+                  >
+                    <CalendarDays size={15} />
+                    {simulatingAction === 'week' ? 'Advancing...' : 'Advance Week'}
                   </button>
                 </div>
 
@@ -3609,57 +3742,122 @@ function App() {
             )}
           </div>
 
-          <aside className="inspector">
-            <section className="screen screen--inspector">
-              <div className="screen__header">
-                <div>
-                  <p className="ui-kicker">Sidebar</p>
-                  <h3>Shortlist</h3>
-                </div>
-              </div>
-
-              <div className="inspector-block">
-                <div className="inspector-block__title">
-                  <BookOpen size={15} />
-                  <strong>Top recruits</strong>
-                </div>
-                {topRecruits.map((recruit) => (
-                  <div className="inspector-row" key={recruit.id}>
-                    <span>{recruit.name}</span>
-                    <strong>{recruit.stars}★</strong>
-                  </div>
-                ))}
-              </div>
-
-              <div className="inspector-block">
-                <div className="inspector-block__title">
-                  <ArrowRightLeft size={15} />
-                  <strong>Portal targets</strong>
-                </div>
-                {openPortalEntries.map((entry) => (
-                  <div className="inspector-row" key={entry.id}>
-                    <span>{entry.player.name}</span>
-                    <strong>{entry.player.overall}</strong>
-                  </div>
-                ))}
-              </div>
-
-              <div className="inspector-block">
-                <div className="inspector-block__title">
-                  <CircleAlert size={15} />
-                  <strong>Compliance inbox</strong>
-                </div>
-                {flaggedReviews.length ? flaggedReviews.map((review) => (
-                  <div className="inspector-row" key={review.id}>
-                    <span>{review.verdict}</span>
-                    <strong>{review.riskLevel}</strong>
-                  </div>
-                )) : <div className="inspector-empty">No active review flags.</div>}
-              </div>
-
-            </section>
-          </aside>
         </section>
+
+        <div
+          id="mobile-nav-sheet"
+          className={classNames('mobile-nav-sheet', mobileMenuOpen && 'is-open')}
+          aria-hidden={!mobileMenuOpen}
+        >
+          <button className="mobile-nav-sheet__backdrop" tabIndex={mobileMenuOpen ? 0 : -1} aria-label="Close menu" onClick={() => setMobileMenuOpen(null)} />
+          <div className="mobile-nav-sheet__panel">
+            {mobileMenuOpen && mobileMenuOpen !== 'More' && (
+              <section className="mobile-nav-sheet__group">
+                <p className="mobile-nav-sheet__label">{mobileMenuOpen}</p>
+                <div className="mobile-nav-sheet__items">
+                  {selectedMobileGroupTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        className={classNames('mobile-nav-sheet__item', selectedTab === tab.id && 'is-active')}
+                        onClick={() => {
+                          setSelectedTab(tab.id);
+                          setMobileMenuOpen(null);
+                        }}
+                      >
+                        <Icon size={16} />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {mobileMenuOpen === 'More' && (
+              <>
+                {Object.entries(groupedTabs).map(([group, groupTabs]) => (
+                  <section key={group} className="mobile-nav-sheet__group">
+                    <p className="mobile-nav-sheet__label">{group}</p>
+                    <div className="mobile-nav-sheet__items">
+                      {groupTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <button
+                            key={tab.id}
+                            className={classNames('mobile-nav-sheet__item', selectedTab === tab.id && 'is-active')}
+                            onClick={() => {
+                              setSelectedTab(tab.id);
+                              setMobileMenuOpen(null);
+                            }}
+                          >
+                            <Icon size={16} />
+                            <span>{tab.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+
+                {utilityTabs.length > 0 && (
+                  <section className="mobile-nav-sheet__group">
+                    <p className="mobile-nav-sheet__label">More</p>
+                    <div className="mobile-nav-sheet__items">
+                      {utilityTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <button
+                            key={tab.id}
+                            className={classNames('mobile-nav-sheet__item', selectedTab === tab.id && 'is-active')}
+                            onClick={() => {
+                              setSelectedTab(tab.id);
+                              setMobileMenuOpen(null);
+                            }}
+                          >
+                            <Icon size={16} />
+                            <span>{tab.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <nav className="mobile-tabbar" aria-label="Mobile navigation">
+          {mobilePrimaryNav.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                className={classNames('mobile-tabbar__item', (currentTabGroup === tab.id || mobileMenuOpen === tab.id) && 'is-active')}
+                onClick={() => handleMobileGroupToggle(tab.id as 'Manager' | 'NCAA' | 'Team')}
+                aria-expanded={mobileMenuOpen === tab.id}
+                aria-controls="mobile-nav-sheet"
+              >
+                <Icon size={16} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+          <button
+            className={classNames(
+              'mobile-tabbar__item',
+              (mobileMenuOpen === 'More' || currentTabGroup === 'Hidden') && 'is-active',
+            )}
+            onClick={() => handleMobileGroupToggle('More')}
+            aria-expanded={mobileMenuOpen === 'More'}
+            aria-controls="mobile-nav-sheet"
+          >
+            <Menu size={16} />
+            <span>More</span>
+          </button>
+        </nav>
       </section>
     </main>
   );

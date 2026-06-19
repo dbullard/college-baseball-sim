@@ -36,6 +36,14 @@ const NCAA_D1_EQUIVALENCY_CAP = 11.7;
 export const NATIONAL_RECRUIT_POOL_SIZE = 2000;
 const DEFAULT_ROSTER_LIMIT = 34;
 
+function normalizeSchoolKey(name: string) {
+  return name
+    .replace(/^University of /i, '')
+    .replace(/^The /i, '')
+    .replace(/ University$/i, '')
+    .trim();
+}
+
 const BASEBALL_PRESTIGE_OVERRIDES: Record<string, number> = {
   LSU: 99,
   Texas: 97,
@@ -139,6 +147,109 @@ const manualTeams = [
   { id: 'uc-irvine', school: 'UC Irvine', nickname: 'Anteaters', conference: 'Big West', location: { city: 'Irvine', state: 'CA', lat: 33.68, lon: -117.82 }, colors: { primary: '#0064a4', secondary: '#ffd200' }, conferenceTier: 75, parkFactor: 0.98, travelDifficulty: 45, prestigeLevel: 82 },
   { id: 'indiana-state', school: 'Indiana State', nickname: 'Sycamores', conference: 'MVC', location: { city: 'Terre Haute', state: 'IN', lat: 39.46, lon: -87.41 }, colors: { primary: '#0033aa', secondary: '#ffffff' }, conferenceTier: 72, parkFactor: 1.0, travelDifficulty: 50, prestigeLevel: 81 }
 ];
+
+const KNOWN_PROGRAM_COLORS: Record<string, { primary: string; secondary: string }> = {
+  ...Object.fromEntries(
+    manualTeams.flatMap((team) => [
+      [team.school, team.colors],
+      [normalizeSchoolKey(team.school), team.colors],
+    ]),
+  ),
+  'Air Force': { primary: '#003087', secondary: '#8E99A8' },
+  Alabama: { primary: '#9E1B32', secondary: '#828A8F' },
+  'Arizona State': { primary: '#8C1D40', secondary: '#FFC627' },
+  'Arkansas State': { primary: '#C8102E', secondary: '#000000' },
+  Baylor: { primary: '#154734', secondary: '#FFB81C' },
+  Belmont: { primary: '#C8102E', secondary: '#002855' },
+  'Boston College': { primary: '#8A100B', secondary: '#B38F59' },
+  Bradley: { primary: '#A50000', secondary: '#0B2345' },
+  BYU: { primary: '#002E5D', secondary: '#FFFFFF' },
+  California: { primary: '#003262', secondary: '#FDB515' },
+  Charlotte: { primary: '#046A38', secondary: '#B9975B' },
+  'CSU Bakersfield': { primary: '#003594', secondary: '#FFD100' },
+  CSUN: { primary: '#CC0000', secondary: '#000000' },
+  Duke: { primary: '#003087', secondary: '#FFFFFF' },
+  Evansville: { primary: '#62259D', secondary: '#F37720' },
+  FAU: { primary: '#003366', secondary: '#CC0000' },
+  FIU: { primary: '#081E3F', secondary: '#B6862C' },
+  'Florida A&M': { primary: '#F58025', secondary: '#00843D' },
+  'Georgia Southern': { primary: '#011E41', secondary: '#A99260' },
+  'Georgia State': { primary: '#0039A6', secondary: '#C60C30' },
+  'Georgia Tech': { primary: '#B3A369', secondary: '#003057' },
+  'Grand Canyon': { primary: '#522398', secondary: '#000000' },
+  Hawaiʻi: { primary: '#024731', secondary: '#C99700' },
+  Hawaii: { primary: '#024731', secondary: '#C99700' },
+  Illinois: { primary: '#FF5F05', secondary: '#13294B' },
+  'Illinois State': { primary: '#CE1126', secondary: '#FFFFFF' },
+  Indiana: { primary: '#990000', secondary: '#EEEDEB' },
+  Iowa: { primary: '#000000', secondary: '#FFCD00' },
+  'Jacksonville State': { primary: '#BA0C2F', secondary: '#FFFFFF' },
+  'James Madison': { primary: '#450084', secondary: '#CBB677' },
+  Kansas: { primary: '#0051BA', secondary: '#E8000D' },
+  'Kansas State': { primary: '#512888', secondary: '#D1D3D4' },
+  'Kennesaw State': { primary: '#000000', secondary: '#FFC629' },
+  Liberty: { primary: '#0A1E5E', secondary: '#C41230' },
+  Louisville: { primary: '#AD0000', secondary: '#000000' },
+  'Loyola Marymount': { primary: '#971B2F', secondary: '#003B5C' },
+  Marshall: { primary: '#00B140', secondary: '#FFFFFF' },
+  Maryland: { primary: '#E03A3E', secondary: '#FFD520' },
+  Miami: { primary: '#005030', secondary: '#F47321' },
+  Michigan: { primary: '#00274C', secondary: '#FFCB05' },
+  'Michigan State': { primary: '#18453B', secondary: '#FFFFFF' },
+  Minnesota: { primary: '#7A0019', secondary: '#FFCC33' },
+  Missouri: { primary: '#000000', secondary: '#F1B82D' },
+  'Missouri State': { primary: '#5E0009', secondary: '#FFFFFF' },
+  'NC State': { primary: '#CC0000', secondary: '#FFFFFF' },
+  Nebraska: { primary: '#E41C38', secondary: '#FFFFFF' },
+  'New Mexico': { primary: '#BA0C2F', secondary: '#A2AAAD' },
+  'New Mexico State': { primary: '#861F41', secondary: '#000000' },
+  NJIT: { primary: '#C8102E', secondary: '#FFFFFF' },
+  'North Carolina': { primary: '#7BAFD4', secondary: '#FFFFFF' },
+  Northwestern: { primary: '#4E2A84', secondary: '#FFFFFF' },
+  'Notre Dame': { primary: '#0C2340', secondary: '#C99700' },
+  'Ohio State': { primary: '#BB0000', secondary: '#666666' },
+  'Old Dominion': { primary: '#003057', secondary: '#7C878E' },
+  Oklahoma: { primary: '#841617', secondary: '#FDF9D8' },
+  'Penn State': { primary: '#041E42', secondary: '#FFFFFF' },
+  Pepperdine: { primary: '#00205C', secondary: '#EE7624' },
+  Pitt: { primary: '#003594', secondary: '#FFB81C' },
+  Purdue: { primary: '#000000', secondary: '#CFB991' },
+  Rice: { primary: '#00205B', secondary: '#A7A8AA' },
+  Rutgers: { primary: '#CC0033', secondary: '#000000' },
+  'Saint Mary\'s': { primary: '#A6192E', secondary: '#00205B' },
+  'Saint Marys': { primary: '#A6192E', secondary: '#00205B' },
+  'San Diego State': { primary: '#A6192E', secondary: '#000000' },
+  'San Jose State': { primary: '#0055A2', secondary: '#E5A823' },
+  'Sam Houston': { primary: '#F56423', secondary: '#1E2A38' },
+  Seattle: { primary: '#A51E36', secondary: '#FFFFFF' },
+  'South Alabama': { primary: '#00205B', secondary: '#BF0D3E' },
+  Stanford: { primary: '#8C1515', secondary: '#FFFFFF' },
+  'Stephen F. Austin': { primary: '#512D6D', secondary: '#FFFFFF' },
+  TCU: { primary: '#4D1979', secondary: '#FFFFFF' },
+  'Texas Tech': { primary: '#CC0000', secondary: '#000000' },
+  Troy: { primary: '#8A2432', secondary: '#B3B5B8' },
+  UAB: { primary: '#1E6B52', secondary: '#B29A57' },
+  'UC Davis': { primary: '#022851', secondary: '#FFBF00' },
+  'UC San Diego': { primary: '#182B49', secondary: '#C69214' },
+  'UC Santa Barbara': { primary: '#003660', secondary: '#FEBE10' },
+  UCF: { primary: '#000000', secondary: '#BA9B37' },
+  UIW: { primary: '#BA0C2F', secondary: '#000000' },
+  UIC: { primary: '#0C2340', secondary: '#D50032' },
+  ULM: { primary: '#7C112E', secondary: '#A89968' },
+  UMass: { primary: '#881C1C', secondary: '#FFFFFF' },
+  'UMass Lowell': { primary: '#003DA5', secondary: '#C5C6C7' },
+  UMBC: { primary: '#000000', secondary: '#FFC20E' },
+  UNLV: { primary: '#CF0A2C', secondary: '#666666' },
+  USC: { primary: '#990000', secondary: '#FFCC00' },
+  'UT Arlington': { primary: '#0064B1', secondary: '#F58025' },
+  UTSA: { primary: '#F15A22', secondary: '#0C2340' },
+  Valparaiso: { primary: '#5D4436', secondary: '#9D8B4E' },
+  'Virginia Tech': { primary: '#630031', secondary: '#CF4420' },
+  Washington: { primary: '#4B2E83', secondary: '#B7A57A' },
+  'Washington State': { primary: '#981E32', secondary: '#5E6A71' },
+  'West Virginia': { primary: '#002855', secondary: '#EAAA00' },
+  WKU: { primary: '#C60C30', secondary: '#FFFFFF' },
+};
 
 const conferences = {
   'SEC': { tier: 95, count: 16, prestigeRange: [75, 99], states: ['AL', 'AR', 'FL', 'GA', 'KY', 'LA', 'MS', 'MO', 'OK', 'SC', 'TN', 'TX'] },
@@ -435,10 +546,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'california-cal-18',
-    school: 'California/Cal',
+    school: 'California',
     nickname: 'Golden Bears',
     conference: 'Atlantic Coast',
-    location: { city: 'California/Cal', state: 'California', lat: 36.309, lon: -119.977 },
+    location: { city: 'California', state: 'California', lat: 36.309, lon: -119.977 },
     colors: { primary: '#8a4b1a', secondary: '#75b4e5' },
     conferenceTier: 95,
     parkFactor: 1.0,
@@ -519,10 +630,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'north-carolina-carolina-25',
-    school: 'North Carolina/Carolina',
+    school: 'North Carolina',
     nickname: 'Tar Heels',
     conference: 'Atlantic Coast',
-    location: { city: 'North Carolina/Carolina', state: 'North Carolina', lat: 35.784, lon: -79.581 },
+    location: { city: 'North Carolina', state: 'North Carolina', lat: 35.784, lon: -79.581 },
     colors: { primary: '#b318a3', secondary: '#4ce75c' },
     conferenceTier: 95,
     parkFactor: 1.0,
@@ -807,10 +918,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'la-salle-university-a-2--49',
-    school: 'La Salle University[a 2]',
+    school: 'La Salle',
     nickname: 'Explorers',
     conference: 'Atlantic 10',
-    location: { city: 'La Salle University[a 2]', state: 'Pennsylvania', lat: 40.763, lon: -77.659 },
+    location: { city: 'La Salle', state: 'Pennsylvania', lat: 40.763, lon: -77.659 },
     colors: { primary: '#9f8948', secondary: '#6076b7' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -1275,10 +1386,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'usc-southern-cal-88',
-    school: 'USC/Southern Cal',
+    school: 'USC',
     nickname: 'Trojans',
     conference: 'Big Ten',
-    location: { city: 'USC/Southern Cal', state: 'California', lat: 35.954, lon: -119.005 },
+    location: { city: 'USC', state: 'California', lat: 35.954, lon: -119.005 },
     colors: { primary: '#8d39b2', secondary: '#72c64d' },
     conferenceTier: 95,
     parkFactor: 1.0,
@@ -1491,10 +1602,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'csun-cal-state-northridge-106',
-    school: 'CSUN/Cal State Northridge',
+    school: 'CSUN',
     nickname: 'Matadors',
     conference: 'Big West',
-    location: { city: 'CSUN/Cal State Northridge', state: 'California', lat: 36.203, lon: -119.935 },
+    location: { city: 'CSUN', state: 'California', lat: 36.203, lon: -119.935 },
     colors: { primary: '#c4d336', secondary: '#3b2cc9' },
     conferenceTier: 80,
     parkFactor: 1.0,
@@ -1503,10 +1614,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'bakersfield-csu-bakersfield-107',
-    school: 'Bakersfield/CSU Bakersfield',
+    school: 'CSU Bakersfield',
     nickname: 'Roadrunners',
     conference: 'Big West',
-    location: { city: 'Bakersfield/CSU Bakersfield', state: 'California', lat: 36.277, lon: -119.428 },
+    location: { city: 'CSU Bakersfield', state: 'California', lat: 36.277, lon: -119.428 },
     colors: { primary: '#3d311d', secondary: '#c2cee2' },
     conferenceTier: 80,
     parkFactor: 1.0,
@@ -1707,10 +1818,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'unc-wilmington-uncw-124',
-    school: 'UNC Wilmington/UNCW',
+    school: 'UNC Wilmington',
     nickname: 'Seahawks',
     conference: 'Coastal Athletic',
-    location: { city: 'UNC Wilmington/UNCW', state: 'North Carolina', lat: 35.717, lon: -80.477 },
+    location: { city: 'UNC Wilmington', state: 'North Carolina', lat: 35.717, lon: -80.477 },
     colors: { primary: '#48929d', secondary: '#b76d62' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -2271,10 +2382,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'massachusetts-umass-171',
-    school: 'Massachusetts/UMass',
+    school: 'UMass',
     nickname: 'Minutemen',
     conference: 'Mid-American',
-    location: { city: 'Massachusetts/UMass', state: 'Massachusetts', lat: 41.691, lon: -72.210 },
+    location: { city: 'UMass', state: 'Massachusetts', lat: 41.691, lon: -72.210 },
     colors: { primary: '#446383', secondary: '#bb9c7c' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -2415,10 +2526,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'southern-illinois-siu-183',
-    school: 'Southern Illinois/SIU',
+    school: 'Southern Illinois',
     nickname: 'Salukis',
     conference: 'Missouri Valley',
-    location: { city: 'Southern Illinois/SIU', state: 'Illinois', lat: 40.341, lon: -89.429 },
+    location: { city: 'Southern Illinois', state: 'Illinois', lat: 40.341, lon: -89.429 },
     colors: { primary: '#cd997a', secondary: '#326685' },
     conferenceTier: 80,
     parkFactor: 1.0,
@@ -2559,10 +2670,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'central-connecticut-ccsu-195',
-    school: 'Central Connecticut/CCSU',
+    school: 'Central Connecticut',
     nickname: 'Blue Devils',
     conference: 'NEC',
-    location: { city: 'Central Connecticut/CCSU', state: 'Connecticut', lat: 41.791, lon: -72.214 },
+    location: { city: 'Central Connecticut', state: 'Connecticut', lat: 41.791, lon: -72.214 },
     colors: { primary: '#a5391a', secondary: '#5ac6e5' },
     conferenceTier: 50,
     parkFactor: 1.0,
@@ -2715,10 +2826,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'southeast-missouri-semo-208',
-    school: 'Southeast Missouri/SEMO',
+    school: 'Southeast Missouri',
     nickname: 'Redhawks',
     conference: 'Ohio Valley',
-    location: { city: 'Southeast Missouri/SEMO', state: 'Missouri', lat: 38.801, lon: -91.799 },
+    location: { city: 'Southeast Missouri', state: 'Missouri', lat: 38.801, lon: -91.799 },
     colors: { primary: '#267e60', secondary: '#d9819f' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -2727,10 +2838,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'siu-edwardsville-siue-209',
-    school: 'SIU Edwardsville/SIUE',
+    school: 'SIU Edwardsville',
     nickname: 'Cougars',
     conference: 'Ohio Valley',
-    location: { city: 'SIU Edwardsville/SIUE', state: 'Illinois', lat: 40.831, lon: -89.455 },
+    location: { city: 'SIU Edwardsville', state: 'Illinois', lat: 40.831, lon: -89.455 },
     colors: { primary: '#89a74a', secondary: '#7658b5' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -2966,12 +3077,12 @@ export const programInputs: ProgramInput[] = [
     prestigeLevel: 88
   },
   {
-    id: 'alternately-mizzou-229',
-    school: 'alternately Mizzou',
+    id: 'missouri-229',
+    school: 'Missouri',
     nickname: 'Tigers',
     conference: 'Southeastern',
-    location: { city: 'alternately Mizzou', state: 'Missouri', lat: 39.039, lon: -92.707 },
-    colors: { primary: '#3f1e8a', secondary: '#c0e175' },
+    location: { city: 'Missouri', state: 'Missouri', lat: 39.039, lon: -92.707 },
+    colors: { primary: '#000000', secondary: '#f1b82d' },
     conferenceTier: 95,
     parkFactor: 1.0,
     travelDifficulty: 50,
@@ -2983,7 +3094,7 @@ export const programInputs: ProgramInput[] = [
     nickname: 'Sooners',
     conference: 'Southeastern',
     location: { city: 'University of Oklahoma', state: 'Oklahoma', lat: 35.768, lon: -97.472 },
-    colors: { primary: '#5f7625', secondary: '#a089da' },
+    colors: { primary: '#841617', secondary: '#FDF9D8' },
     conferenceTier: 95,
     parkFactor: 1.0,
     travelDifficulty: 50,
@@ -3026,12 +3137,12 @@ export const programInputs: ProgramInput[] = [
     prestigeLevel: 96
   },
   {
-    id: 'tamu-234',
-    school: 'TAMU',
+    id: 'texas-am-234',
+    school: 'Texas A&M',
     nickname: 'Aggies',
     conference: 'Southeastern',
-    location: { city: 'TAMU', state: 'Texas', lat: 31.750, lon: -97.737 },
-    colors: { primary: '#2c199c', secondary: '#d3e663' },
+    location: { city: 'Texas A&M', state: 'Texas', lat: 31.750, lon: -97.737 },
+    colors: { primary: '#500000', secondary: '#ffffff' },
     conferenceTier: 95,
     parkFactor: 1.0,
     travelDifficulty: 50,
@@ -3099,10 +3210,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'unc-greensboro-uncg-240',
-    school: 'UNC Greensboro/UNCG',
+    school: 'UNC Greensboro',
     nickname: 'Spartans',
     conference: 'Southern',
-    location: { city: 'UNC Greensboro/UNCG', state: 'North Carolina', lat: 35.865, lon: -79.335 },
+    location: { city: 'UNC Greensboro', state: 'North Carolina', lat: 35.865, lon: -79.335 },
     colors: { primary: '#b1a132', secondary: '#4e5ecd' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -3158,11 +3269,11 @@ export const programInputs: ProgramInput[] = [
     prestigeLevel: 68
   },
   {
-    id: 'alternately-uiw-245',
-    school: 'alternately UIW',
+    id: 'uiw-245',
+    school: 'UIW',
     nickname: 'Cardinals',
     conference: 'Southland',
-    location: { city: 'alternately UIW', state: 'Texas', lat: 31.286, lon: -97.060 },
+    location: { city: 'UIW', state: 'Texas', lat: 31.286, lon: -97.060 },
     colors: { primary: '#1a3ab8', secondary: '#e5c547' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -3243,10 +3354,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'stephen-f--austin-sfa-252',
-    school: 'Stephen F. Austin/SFA',
+    school: 'Stephen F. Austin',
     nickname: 'Lumberjacks',
     conference: 'Southland',
-    location: { city: 'Stephen F. Austin/SFA', state: 'Texas', lat: 30.587, lon: -97.193 },
+    location: { city: 'Stephen F. Austin', state: 'Texas', lat: 30.587, lon: -97.193 },
     colors: { primary: '#37b583', secondary: '#c84a7c' },
     conferenceTier: 65,
     parkFactor: 1.0,
@@ -3579,10 +3690,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'louisiana-monroe-ulm-280',
-    school: 'Louisiana–Monroe/ULM',
+    school: 'ULM',
     nickname: 'Warhawks',
     conference: 'Sun Belt',
-    location: { city: 'Louisiana–Monroe/ULM', state: 'Louisiana', lat: 31.404, lon: -92.409 },
+    location: { city: 'ULM', state: 'Louisiana', lat: 31.404, lon: -92.409 },
     colors: { primary: '#239db5', secondary: '#dc624a' },
     conferenceTier: 80,
     parkFactor: 1.0,
@@ -3674,11 +3785,11 @@ export const programInputs: ProgramInput[] = [
     prestigeLevel: 76
   },
   {
-    id: 'alternately-lmu-288',
-    school: 'alternately LMU',
+    id: 'loyola-marymount-288',
+    school: 'Loyola Marymount',
     nickname: 'Lions',
     conference: 'West Coast',
-    location: { city: 'alternately LMU', state: 'California', lat: 36.180, lon: -119.949 },
+    location: { city: 'Loyola Marymount', state: 'California', lat: 36.180, lon: -119.949 },
     colors: { primary: '#397e52', secondary: '#c681ad' },
     conferenceTier: 80,
     parkFactor: 1.0,
@@ -3723,10 +3834,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'saint-mary-s-smc-292',
-    school: 'Saint Mary\'s/SMC',
+    school: 'Saint Mary\'s',
     nickname: 'Gaels',
     conference: 'West Coast',
-    location: { city: 'Saint Mary\'s/SMC', state: 'California', lat: 35.379, lon: -118.866 },
+    location: { city: 'Saint Mary\'s', state: 'California', lat: 35.379, lon: -118.866 },
     colors: { primary: '#2188a5', secondary: '#de775a' },
     conferenceTier: 80,
     parkFactor: 1.0,
@@ -3831,10 +3942,10 @@ export const programInputs: ProgramInput[] = [
   },
   {
     id: 'ut-arlington-uta-301',
-    school: 'UT Arlington/UTA',
+    school: 'UT Arlington',
     nickname: 'Mavericks',
     conference: 'Western Athletic',
-    location: { city: 'UT Arlington/UTA', state: 'Texas', lat: 30.994, lon: -97.238 },
+    location: { city: 'UT Arlington', state: 'Texas', lat: 30.994, lon: -97.238 },
     colors: { primary: '#16be77', secondary: '#e94188' },
     conferenceTier: 50,
     parkFactor: 1.0,
@@ -3877,14 +3988,6 @@ const lastNames = [
   'Jeffers', 'Ramsey', 'Compton', 'Benton', 'Mays', 'Pope', 'Byrd', 'Figueroa', 'Pruitt',
 ];
 const hometowns = ['Nashville, TN', 'Tampa, FL', 'Houston, TX', 'Raleigh, NC', 'Baton Rouge, LA', 'Tulsa, OK', 'Scottsdale, AZ', 'Athens, GA', 'Irvine, CA', 'Jackson, MS'];
-
-function normalizeSchoolKey(name: string) {
-  return name
-    .replace(/^University of /, '')
-    .replace(/^The /, '')
-    .replace(/ University$/, '')
-    .trim();
-}
 
 function conferencePrestigeBase(conference: string) {
   if (conference === 'SEC') return 76;
@@ -3963,14 +4066,16 @@ function deriveProgramRegion(conference: string) {
 function buildPrograms(): Program[] {
   return programInputs.map((input) => {
     const prestige = derivePrestigeProfile(input);
+    const normalizedSchool = normalizeSchoolKey(input.school);
+    const colors = KNOWN_PROGRAM_COLORS[input.school] ?? KNOWN_PROGRAM_COLORS[normalizedSchool] ?? input.colors;
     return {
       location: input.location,
       id: input.id,
-      school: input.school,
+      school: normalizedSchool,
       nickname: input.nickname,
       conference: input.conference,
       region: deriveProgramRegion(input.conference),
-      colors: input.colors,
+      colors,
       conferenceTier: input.conferenceTier,
       parkFactor: input.parkFactor,
       travelDifficulty: input.travelDifficulty,
@@ -4173,10 +4278,11 @@ function rebalanceRosterScholarships(roster: Player[], scholarshipBudget: number
 export const programs = buildPrograms();
 const manualPrograms: Program[] = manualTeams.map((input) => {
   const prestige = derivePrestigeProfile(input);
+  const normalizedSchool = normalizeSchoolKey(input.school);
   return {
     location: input.location,
     id: input.id,
-    school: input.school,
+    school: normalizedSchool,
     nickname: input.nickname,
     conference: input.conference,
     region: deriveProgramRegion(input.conference),
