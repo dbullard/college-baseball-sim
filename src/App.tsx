@@ -1039,6 +1039,65 @@ function CommitmentChip({ interest }: { interest: number }) {
   );
 }
 
+const PREF_TO_ACTION: Record<string, RecruitingActionId> = {
+  proximity: 'call',
+  prestige: 'campus-visit',
+  nil: 'nil-presentation',
+  development: 'development-pitch',
+  playingTime: 'playing-time-pitch',
+};
+
+const ACTION_META: Record<RecruitingActionId, { label: string; cost: number; prefLabel: string }> = {
+  scout:                 { label: 'Scout',        cost: 2, prefLabel: 'Scouting' },
+  call:                  { label: 'Call',         cost: 3, prefLabel: 'Proximity' },
+  'campus-visit':        { label: 'Campus Visit', cost: 5, prefLabel: 'Prestige' },
+  'development-pitch':   { label: 'Dev Pitch',    cost: 4, prefLabel: 'Development' },
+  'nil-presentation':    { label: 'NIL Pitch',    cost: 4, prefLabel: 'NIL' },
+  'playing-time-pitch':  { label: 'PT Pitch',     cost: 3, prefLabel: 'Playing Time' },
+};
+
+type PitchSlot = { actionId: RecruitingActionId; label: string; cost: number; prefLabel: string; isCritical: boolean };
+
+function buildPitchBoard(recruit: Recruit): PitchSlot[] {
+  const scoutingLevel = recruit.scoutingLevel ?? 0;
+  if (scoutingLevel === 0) return [];
+
+  const dealbreaker = recruit.dealbreaker !== 'none' ? recruit.dealbreaker : null;
+  const dealbreakerAction = dealbreaker ? PREF_TO_ACTION[dealbreaker] : null;
+  const slots: PitchSlot[] = [];
+
+  if (dealbreakerAction) {
+    const meta = ACTION_META[dealbreakerAction];
+    slots.push({
+      actionId: dealbreakerAction,
+      label: meta.label,
+      cost: meta.cost,
+      prefLabel: scoutingLevel >= 3 ? `⚠ ${meta.prefLabel} (Critical)` : '⚠ Critical Pitch',
+      isCritical: true,
+    });
+  }
+
+  const prefEntries = Object.entries(recruit.preferences)
+    .filter(([key]) => key !== (dealbreaker ?? ''))
+    .sort(([, a], [, b]) => (b as number) - (a as number));
+
+  for (const [prefKey] of prefEntries) {
+    if (slots.length >= 3) break;
+    const actionId = PREF_TO_ACTION[prefKey];
+    if (!actionId || slots.some((s) => s.actionId === actionId)) continue;
+    const meta = ACTION_META[actionId];
+    slots.push({ actionId, label: meta.label, cost: meta.cost, prefLabel: meta.prefLabel, isCritical: false });
+  }
+
+  return slots;
+}
+
+function buildOtherActions(pitchBoard: PitchSlot[]): RecruitingActionId[] {
+  const boardIds = new Set(pitchBoard.map((s) => s.actionId));
+  return (['call', 'campus-visit', 'development-pitch', 'nil-presentation', 'playing-time-pitch'] as RecruitingActionId[])
+    .filter((id) => !boardIds.has(id));
+}
+
 function buildRecruitPreviewStats(recruit: Recruit) {
   const offense = recruit.offense;
   const pitching = recruit.pitching;
@@ -2830,16 +2889,38 @@ function App() {
                             </div>
                             <div className="table-cell">{recruit.weeklyPointsSpent ?? 0} pts</div>
                             <div className="table-cell table-cell--actions">
-                              {recruitingActionButtons.map((action) => (
-                                <button
-                                  key={action.id}
-                                  className="ui-button ui-button--ghost ui-button--compact"
-                                  disabled={(recruit.weeklyActions ?? []).includes(action.id) || save.recruitingPointsRemaining < action.cost}
-                                  onClick={() => applyRecruitingAction(recruit.id, action.id)}
-                                >
-                                  {action.label} {action.cost}
-                                </button>
-                              ))}
+                              {(() => {
+                                const pitchBoard = buildPitchBoard(recruit);
+                                const scoutingLevel = recruit.scoutingLevel ?? 0;
+                                if (scoutingLevel === 0) {
+                                  return (
+                                    <button
+                                      className="ui-button ui-button--ghost ui-button--compact"
+                                      disabled={(recruit.weeklyActions ?? []).includes('scout') || save.recruitingPointsRemaining < 2}
+                                      onClick={() => applyRecruitingAction(recruit.id, 'scout')}
+                                    >
+                                      Scout (2 pts)
+                                    </button>
+                                  );
+                                }
+                                return (
+                                  <>
+                                    {pitchBoard.map((slot) => {
+                                      const used = (recruit.weeklyActions ?? []).includes(slot.actionId);
+                                      return (
+                                        <button
+                                          key={slot.actionId}
+                                          className={`ui-button ${slot.isCritical ? '' : 'ui-button--ghost'} ui-button--compact`}
+                                          disabled={used || save.recruitingPointsRemaining < slot.cost}
+                                          onClick={() => applyRecruitingAction(recruit.id, slot.actionId)}
+                                        >
+                                          {used ? '✓ ' : ''}{slot.label} {slot.cost}
+                                        </button>
+                                      );
+                                    })}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         ))}
@@ -3154,23 +3235,96 @@ function App() {
                       </div>
                       <div className="dossier-actions">
                         {!recruit.targeted && !recruit.committedProgramId && (
-                          <button className="ui-button ui-button--primary" onClick={() => toggleRecruitTarget(recruit.id)}>Target Recruit</button>
+                          <button className="ui-button ui-button--primary" onClick={() => toggleRecruitTarget(recruit.id)}>
+                            Target Recruit
+                          </button>
                         )}
-                        {recruit.targeted && !recruit.committedProgramId && (
-                          <>
-                            {recruitingActionButtons.map((action) => (
+
+                        {recruit.targeted && !recruit.committedProgramId && (() => {
+                          const pitchBoard = buildPitchBoard(recruit);
+                          const otherActions = buildOtherActions(pitchBoard);
+
+                          if ((recruit.scoutingLevel ?? 0) === 0) {
+                            return (
+                              <>
+                                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                  Scout this recruit to unlock personalized pitch slots.
+                                </p>
+                                <button
+                                  className="ui-button ui-button--ghost"
+                                  disabled={(recruit.weeklyActions ?? []).includes('scout') || save.recruitingPointsRemaining < 2}
+                                  onClick={() => applyRecruitingAction(recruit.id, 'scout')}
+                                >
+                                  Scout (2 pts) — level {recruit.scoutingLevel ?? 0}/3
+                                </button>
+                              </>
+                            );
+                          }
+
+                          return (
+                            <>
+                              {(recruit.scoutingLevel ?? 0) < 3 && (
+                                <button
+                                  className="ui-button ui-button--ghost ui-button--compact"
+                                  disabled={(recruit.weeklyActions ?? []).includes('scout') || save.recruitingPointsRemaining < 2}
+                                  onClick={() => applyRecruitingAction(recruit.id, 'scout')}
+                                >
+                                  Scout (2 pts) — level {recruit.scoutingLevel}/3
+                                </button>
+                              )}
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' }}>
+                                {pitchBoard.map((slot) => {
+                                  const used = (recruit.weeklyActions ?? []).includes(slot.actionId);
+                                  return (
+                                    <button
+                                      key={slot.actionId}
+                                      className={`ui-button ${slot.isCritical ? 'ui-button--primary' : 'ui-button--ghost'} ui-button--compact`}
+                                      disabled={used || save.recruitingPointsRemaining < slot.cost}
+                                      onClick={() => applyRecruitingAction(recruit.id, slot.actionId)}
+                                      style={used ? { opacity: 0.5 } : undefined}
+                                    >
+                                      {used ? '✓ ' : ''}{slot.prefLabel} — {slot.label} ({slot.cost} pts)
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {otherActions.length > 0 && (
+                                <details style={{ marginTop: '4px' }}>
+                                  <summary style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                    Other actions
+                                  </summary>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                                    {otherActions.map((actionId) => {
+                                      const meta = ACTION_META[actionId];
+                                      const used = (recruit.weeklyActions ?? []).includes(actionId);
+                                      return (
+                                        <button
+                                          key={actionId}
+                                          className="ui-button ui-button--ghost ui-button--compact"
+                                          disabled={used || save.recruitingPointsRemaining < meta.cost}
+                                          onClick={() => applyRecruitingAction(recruit.id, actionId)}
+                                          style={{ opacity: 0.7 }}
+                                        >
+                                          {used ? '✓ ' : ''}{meta.label} ({meta.cost} pts)
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </details>
+                              )}
+
                               <button
-                                key={action.id}
                                 className="ui-button ui-button--ghost ui-button--compact"
-                                disabled={(recruit.weeklyActions ?? []).includes(action.id) || save.recruitingPointsRemaining < action.cost}
-                                onClick={() => applyRecruitingAction(recruit.id, action.id)}
+                                style={{ marginTop: '8px' }}
+                                onClick={() => toggleRecruitTarget(recruit.id)}
                               >
-                                {action.label} ({action.cost} pts)
+                                Untarget
                               </button>
-                            ))}
-                            <button className="ui-button ui-button--ghost ui-button--compact" onClick={() => toggleRecruitTarget(recruit.id)}>Untarget</button>
-                          </>
-                        )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {recruit.targeted && !recruit.committedProgramId && (
