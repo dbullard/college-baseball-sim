@@ -916,6 +916,7 @@ function App() {
   const [recruitingView, setRecruitingView] = useState<'overview' | 'freshmen' | 'portal' | 'profile'>('overview');
   const [showRecruitingHelp, setShowRecruitingHelp] = useState(false);
   const [simulatingAction, setSimulatingAction] = useState<null | 'game' | 'day' | 'week'>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<null | 'Manager' | 'NCAA' | 'Team' | 'More'>(null);
   const simTimeoutRef = useRef<number | null>(null);
   const [rosterSort, setRosterSort] = useState<{ key: RosterSortKey; direction: 'asc' | 'desc' }>({
     key: 'overall',
@@ -1633,7 +1634,6 @@ function App() {
       ? 'Current phase: game day. You can preview the matchup or simulate it directly from here.'
       : 'Current phase: off day. Use the shortcuts below to handle team management before you advance.';
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<null | 'Manager' | 'NCAA' | 'Team' | 'More'>(null);
   const visibleTabs = tabs.filter((tab) => !tab.hidden);
   const groupedTabs = visibleTabs.reduce<Record<string, Array<(typeof tabs)[number]>>>((groups, tab) => {
     groups[tab.group] = [...(groups[tab.group] ?? []), tab];
