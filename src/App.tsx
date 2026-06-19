@@ -2910,7 +2910,7 @@ function App() {
                                       return (
                                         <button
                                           key={slot.actionId}
-                                          className={`ui-button ${slot.isCritical ? '' : 'ui-button--ghost'} ui-button--compact`}
+                                          className={`ui-button ${slot.isCritical ? 'ui-button--primary' : 'ui-button--ghost'} ui-button--compact`}
                                           disabled={used || save.recruitingPointsRemaining < slot.cost}
                                           onClick={() => applyRecruitingAction(recruit.id, slot.actionId)}
                                         >

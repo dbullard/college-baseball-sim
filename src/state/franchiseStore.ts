@@ -851,6 +851,7 @@ function calculatePortalProgramFit(save: FranchiseSave, programId: string, entry
     stars: entry.player.overall >= 80 ? 5 : entry.player.overall >= 72 ? 4 : entry.player.overall >= 64 ? 3 : 2,
     interest: entry.interest,
     signability: clamp(100 - entry.tamperRisk, 25, 95),
+    askingNil: entry.askingSchoolNil,
     developmentCurve: entry.player.developmentCurve,
     marketability: entry.player.marketability,
     preferences: entry.player.preferences,
