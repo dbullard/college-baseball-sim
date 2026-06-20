@@ -67,14 +67,6 @@ const tabs: Array<{
   { id: 'player', label: 'Player Page', icon: Users, group: 'Hidden', hidden: true },
 ];
 
-const recruitingActionButtons: Array<{ id: RecruitingActionId; label: string; cost: number }> = [
-  { id: 'scout', label: 'Scout', cost: 2 },
-  { id: 'call', label: 'Call', cost: 3 },
-  { id: 'campus-visit', label: 'Visit', cost: 5 },
-  { id: 'development-pitch', label: 'Dev', cost: 4 },
-  { id: 'nil-presentation', label: 'NIL', cost: 4 },
-  { id: 'playing-time-pitch', label: 'PT', cost: 3 },
-];
 
 type RosterSortKey = 'name' | 'position' | 'classYear' | 'overall' | 'potential' | 'tools' | 'scholarship' | 'nil';
 type ProgramSortKey = 'school' | 'conference' | 'prestige' | 'nil';
